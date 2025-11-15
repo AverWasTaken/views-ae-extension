@@ -1,5 +1,14 @@
 "use strict";
 
+/**
+ * Views Asset Manager - After Effects Extension
+ * 
+ * Configuration:
+ * - Set API_KEY via window.VIEWS_ASSET_MANAGER_API_KEY before loading this script
+ * - API key can be either an admin key or a user-generated key from the API
+ * - All API requests require the X-API-Key header for authentication
+ */
+
 (function () {
     const API_BASE_URL = "https://api.viewseditors.com/";
     const API_KEY = window.VIEWS_ASSET_MANAGER_API_KEY || "";
@@ -71,14 +80,24 @@
         elements.refreshButton.disabled = shouldShow;
     };
 
+    /**
+     * Validates that an API key is configured
+     * @throws {Error} If API key is not set
+     */
     const ensureApiKey = () => {
         if (!API_KEY) {
-            const warning = "Missing API key. Set window.VIEWS_ASSET_MANAGER_API_KEY.";
+            const warning = "Missing API key. Set window.VIEWS_ASSET_MANAGER_API_KEY before loading.";
             console.error(`[ViewsAssetManager] ${warning}`);
             throw new Error(warning);
         }
     };
 
+    /**
+     * Makes an authenticated GET request to the API
+     * @param {string} path - API endpoint path (e.g., "/assets")
+     * @returns {Promise<Object>} Parsed JSON response
+     * @throws {Error} If API key is missing or request fails
+     */
     const fetchJson = async (path) => {
         ensureApiKey();
         const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -87,7 +106,6 @@
             headers: {
                 "Content-Type": "application/json",
                 Accept: "application/json",
-                "X-Requested-With": "XMLHttpRequest",
                 "X-API-Key": API_KEY
             }
         });
@@ -98,6 +116,11 @@
         return response.json();
     };
 
+    /**
+     * Fetches the asset catalog from the API
+     * Expected response format: { assets: [...] }
+     * Each asset contains: id, name, size, thumbnail, uploadDate
+     */
     const fetchAssets = async () => {
         setLoading(true);
         setStatus("Fetching assets…", "info");
@@ -118,11 +141,44 @@
         }
     };
 
+    /**
+     * Requests a presigned download URL for an asset
+     * @param {string} assetId - Asset ID (S3 key, e.g., "assets/timestamp-filename.png")
+     * @returns {Promise<Object>} Response containing { url: "presigned-url" }
+     * @note The presigned URL expires after 60 seconds
+     */
     const requestAssetDownload = async (assetId) => {
         if (!assetId) {
             throw new Error("Asset id missing.");
         }
         return fetchJson(`/assets/${assetId}/download`);
+    };
+
+    /**
+     * Downloads a file from a URL and converts it to base64
+     * @param {string} url - The URL to download from (presigned URL from API)
+     * @returns {Promise<string>} Base64-encoded file data
+     */
+    const downloadFileAsBase64 = async (url) => {
+        const response = await fetch(url, {
+            method: "GET",
+            cache: "no-cache"
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64 = reader.result.split(",")[1];
+                resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
     };
 
     const handleAssetDownload = async (asset, button) => {
@@ -135,27 +191,29 @@
         try {
             log("Starting download for asset", asset.id);
             const payload = await requestAssetDownload(asset.id);
-            let importPath = payload.filePath || payload.path;
-            const base64Blob = payload.base64Data || payload.base64 || payload.data;
 
-            if (!importPath && base64Blob) {
-                const fileName =
-                    payload.fileName ||
-                    `${sanitizeFileName(asset.name || "asset")}-${asset.id || Date.now()}.png`;
-                const path = await evalScript(
-                    `saveToTemp("${escapeForEval(base64Blob)}","${escapeForEval(fileName)}")`
-                );
-                importPath = path;
+            if (!payload.url) {
+                throw new Error("API did not provide a download URL.");
             }
+
+            log("Downloading asset from presigned URL");
+            const base64Data = await downloadFileAsBase64(payload.url);
+
+            const fileName = sanitizeFileName(asset.name || "asset");
+            log("Saving asset to temp directory");
+            const importPath = await evalScript(
+                `saveToTemp("${escapeForEval(base64Data)}","${escapeForEval(fileName)}")`
+            );
 
             if (!importPath) {
-                throw new Error("API did not provide a file path.");
+                throw new Error("Failed to save asset to temporary directory.");
             }
 
+            log("Importing asset into After Effects");
             const result = await evalScript(
                 `importAndAddAsset("${escapeForEval(importPath)}")`
             );
-            log("Asset imported", asset.id);
+            log("Asset imported successfully:", asset.id);
             setStatus(result || `${asset.name || "Asset"} imported successfully.`, "success");
         } catch (error) {
             console.error(LOG_PREFIX, "Import failed", error);
@@ -186,6 +244,11 @@
         log("Rendered asset grid.");
     };
 
+    /**
+     * Creates an asset card element for the grid
+     * @param {Object} asset - Asset data from API (id, name, size, thumbnail, uploadDate)
+     * @returns {HTMLElement} Article element containing the asset card
+     */
     const createAssetCard = (asset) => {
         const card = document.createElement("article");
         card.className = "asset-card";
@@ -193,7 +256,7 @@
         const img = document.createElement("img");
         img.className = "asset-card__thumb";
         img.alt = asset.name || "Asset thumbnail";
-        img.src = asset.thumbnailUrl || asset.previewUrl || asset.thumbnail || PLACEHOLDER_THUMB;
+        img.src = asset.thumbnail || PLACEHOLDER_THUMB;
 
         const title = document.createElement("p");
         title.className = "asset-card__title";
