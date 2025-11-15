@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Views Asset Manager</title>
+    <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body>
+    <div class="panel">
+        <header class="panel__header">
+            <h1>Views Asset Manager</h1>
+            <button id="refreshButton" class="btn btn--ghost" type="button">Refresh</button>
+        </header>
+
+        <section id="statusArea" class="status status--hidden" role="status"></section>
+
+        <div id="spinner" class="spinner spinner--hidden">
+            <div class="spinner__ring"></div>
+            <p>Loading assets...</p>
+        </div>
+
+        <section id="assetGrid" class="asset-grid" aria-live="polite"></section>
+    </div>
+
+    <script src="js/CSInterface.js"></script>
+    <script src="js/main.js"></script>
+</body>
+
+</html>
+
