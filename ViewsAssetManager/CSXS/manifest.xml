@@ -9,13 +9,15 @@
     </ExtensionList>
     <ExecutionEnvironment>
         <HostList>
-            <Host Name="AEFT" Version="[24.0,25.9]" />
+            <!-- Support After Effects 2019 (v16) through 2025 (v25) -->
+            <Host Name="AEFT" Version="[16.0,25.9]" />
         </HostList>
         <LocaleList>
             <Locale Code="All" />
         </LocaleList>
         <RequiredRuntimeList>
-            <RequiredRuntime Name="CSXS" Version="11.0" />
+            <!-- Target CEP runtime compatible back to AE 2019 while still working in newer versions -->
+            <RequiredRuntime Name="CSXS" Version="10.0" />
         </RequiredRuntimeList>
     </ExecutionEnvironment>
     <DispatchInfoList>
