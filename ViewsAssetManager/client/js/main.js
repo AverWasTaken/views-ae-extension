@@ -3,15 +3,14 @@
 /**
  * Views Asset Manager - After Effects Extension
  * 
- * Configuration:
- * - Set API_KEY via window.VIEWS_ASSET_MANAGER_API_KEY before loading this script
+ * API key is stored securely in localStorage and can be managed via the GUI.
  * - API key can be either an admin key or a user-generated key from the API
  * - All API requests require the X-API-Key header for authentication
  */
 
 (function () {
     const API_BASE_URL = "https://api.viewseditors.com/";
-    const API_KEY = window.VIEWS_ASSET_MANAGER_API_KEY || "";
+    const API_KEY_STORAGE_KEY = "views_asset_manager_api_key";
     const LOG_PREFIX = "[ViewsAssetManager]";
     const PLACEHOLDER_THUMB =
         "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%232a2a2a'/%3E%3Cpath d='M40 140l40-50 35 35 25-30 20 45H40z' fill='%233a3a3a'/%3E%3C/svg%3E";
@@ -22,11 +21,23 @@
         grid: document.getElementById("assetGrid"),
         spinner: document.getElementById("spinner"),
         status: document.getElementById("statusArea"),
-        refreshButton: document.getElementById("refreshButton")
+        refreshButton: document.getElementById("refreshButton"),
+        settingsButton: document.getElementById("settingsButton"),
+        apiKeyModal: document.getElementById("apiKeyModal"),
+        apiKeyForm: document.getElementById("apiKeyForm"),
+        apiKeyInput: document.getElementById("apiKeyInput"),
+        apiKeyError: document.getElementById("apiKeyError"),
+        saveApiKeyButton: document.getElementById("saveApiKeyButton"),
+        cancelApiKeyButton: document.getElementById("cancelApiKeyButton"),
+        toggleApiKeyVisibility: document.getElementById("toggleApiKeyVisibility"),
+        showKeyIcon: document.getElementById("showKeyIcon"),
+        hideKeyIcon: document.getElementById("hideKeyIcon")
     };
 
     const state = {
-        assets: []
+        assets: [],
+        apiKey: "",
+        isFirstRun: false
     };
 
     const escapeForEval = (value) =>
@@ -57,6 +68,73 @@
             }
         });
 
+    /**
+     * Storage functions for API key management
+     */
+    const storage = {
+        get: (key) => {
+            try {
+                return localStorage.getItem(key);
+            } catch (error) {
+                console.error(LOG_PREFIX, "Failed to read from storage:", error);
+                return null;
+            }
+        },
+        set: (key, value) => {
+            try {
+                localStorage.setItem(key, value);
+                return true;
+            } catch (error) {
+                console.error(LOG_PREFIX, "Failed to write to storage:", error);
+                return false;
+            }
+        },
+        remove: (key) => {
+            try {
+                localStorage.removeItem(key);
+                return true;
+            } catch (error) {
+                console.error(LOG_PREFIX, "Failed to remove from storage:", error);
+                return false;
+            }
+        }
+    };
+
+    /**
+     * Gets the stored API key
+     * @returns {string|null} The stored API key or null
+     */
+    const getStoredApiKey = () => {
+        return storage.get(API_KEY_STORAGE_KEY);
+    };
+
+    /**
+     * Stores the API key securely
+     * @param {string} apiKey - The API key to store
+     * @returns {boolean} Success status
+     */
+    const storeApiKey = (apiKey) => {
+        const success = storage.set(API_KEY_STORAGE_KEY, apiKey);
+        if (success) {
+            state.apiKey = apiKey;
+            log("API key stored successfully");
+        }
+        return success;
+    };
+
+    /**
+     * Removes the stored API key
+     * @returns {boolean} Success status
+     */
+    const removeApiKey = () => {
+        const success = storage.remove(API_KEY_STORAGE_KEY);
+        if (success) {
+            state.apiKey = "";
+            log("API key removed");
+        }
+        return success;
+    };
+
     const loadHostScript = async () => {
         const extensionRoot = csInterface.getSystemPath(SystemPath.EXTENSION);
         const normalized = extensionRoot.replace(/\\/g, "\\\\");
@@ -85,8 +163,8 @@
      * @throws {Error} If API key is not set
      */
     const ensureApiKey = () => {
-        if (!API_KEY) {
-            const warning = "Missing API key. Set window.VIEWS_ASSET_MANAGER_API_KEY before loading.";
+        if (!state.apiKey) {
+            const warning = "API key is required. Please configure your API key in settings.";
             console.error(`[ViewsAssetManager] ${warning}`);
             throw new Error(warning);
         }
@@ -106,7 +184,7 @@
             headers: {
                 "Content-Type": "application/json",
                 Accept: "application/json",
-                "X-API-Key": API_KEY
+                "X-API-Key": state.apiKey
             }
         });
 
@@ -274,10 +352,159 @@
         return card;
     };
 
+    /**
+     * Shows the API key setup modal
+     * @param {boolean} isRequired - Whether the modal can be cancelled
+     */
+    const showApiKeyModal = (isRequired = false) => {
+        elements.apiKeyModal.classList.remove("modal--hidden");
+        elements.apiKeyInput.value = "";
+        elements.apiKeyError.classList.add("form-error--hidden");
+        elements.apiKeyError.textContent = "";
+        elements.cancelApiKeyButton.style.display = isRequired ? "none" : "inline-flex";
+        elements.apiKeyInput.focus();
+        log(isRequired ? "Showing required API key setup" : "Showing API key settings");
+    };
+
+    /**
+     * Hides the API key setup modal
+     */
+    const hideApiKeyModal = () => {
+        elements.apiKeyModal.classList.add("modal--hidden");
+        elements.apiKeyInput.value = "";
+        elements.apiKeyError.classList.add("form-error--hidden");
+    };
+
+    /**
+     * Shows an error in the API key form
+     * @param {string} message - Error message to display
+     */
+    const showApiKeyError = (message) => {
+        elements.apiKeyError.textContent = message;
+        elements.apiKeyError.classList.remove("form-error--hidden");
+    };
+
+    /**
+     * Validates an API key by making a test request
+     * @param {string} apiKey - The API key to validate
+     * @returns {Promise<boolean>} Whether the key is valid
+     */
+    const validateApiKey = async (apiKey) => {
+        if (!apiKey || apiKey.trim().length === 0) {
+            throw new Error("API key cannot be empty");
+        }
+
+        // Test the key by making a request to the API
+        try {
+            const response = await fetch(`${API_BASE_URL}/assets`, {
+                method: "GET",
+                cache: "no-cache",
+                headers: {
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                    "X-API-Key": apiKey
+                }
+            });
+
+            if (response.status === 401) {
+                throw new Error("Invalid API key. Please check and try again.");
+            }
+
+            if (!response.ok && response.status !== 404) {
+                throw new Error(`API error ${response.status}: ${response.statusText}`);
+            }
+
+            return true;
+        } catch (error) {
+            if (error.message.includes("API error") || error.message.includes("Invalid API key")) {
+                throw error;
+            }
+            throw new Error("Unable to validate API key. Check your network connection.");
+        }
+    };
+
+    /**
+     * Handles API key form submission
+     * @param {Event} event - Form submit event
+     */
+    const handleApiKeySubmit = async (event) => {
+        event.preventDefault();
+        
+        const apiKey = elements.apiKeyInput.value.trim();
+        
+        if (!apiKey) {
+            showApiKeyError("Please enter an API key");
+            return;
+        }
+
+        elements.saveApiKeyButton.disabled = true;
+        elements.saveApiKeyButton.textContent = "Validating...";
+        elements.apiKeyError.classList.add("form-error--hidden");
+
+        try {
+            log("Validating API key...");
+            await validateApiKey(apiKey);
+            
+            const success = storeApiKey(apiKey);
+            if (!success) {
+                throw new Error("Failed to store API key");
+            }
+
+            log("API key validated and stored successfully");
+            hideApiKeyModal();
+            
+            if (state.isFirstRun) {
+                state.isFirstRun = false;
+                setStatus("API key configured successfully!", "success");
+                await fetchAssets();
+            } else {
+                setStatus("API key updated successfully!", "success");
+            }
+        } catch (error) {
+            console.error(LOG_PREFIX, "API key validation failed:", error);
+            showApiKeyError(error.message || "Failed to validate API key");
+        } finally {
+            elements.saveApiKeyButton.disabled = false;
+            elements.saveApiKeyButton.textContent = "Save Key";
+        }
+    };
+
+    /**
+     * Toggles API key visibility in the input field
+     */
+    const toggleApiKeyVisibility = () => {
+        const isPassword = elements.apiKeyInput.type === "password";
+        elements.apiKeyInput.type = isPassword ? "text" : "password";
+        elements.showKeyIcon.classList.toggle("hidden", isPassword);
+        elements.hideKeyIcon.classList.toggle("hidden", !isPassword);
+    };
+
     const bindEvents = () => {
         elements.refreshButton.addEventListener("click", () => {
             log("Manual refresh requested.");
             fetchAssets();
+        });
+
+        elements.settingsButton.addEventListener("click", () => {
+            log("Settings opened.");
+            showApiKeyModal(false);
+        });
+
+        elements.apiKeyForm.addEventListener("submit", handleApiKeySubmit);
+
+        elements.cancelApiKeyButton.addEventListener("click", () => {
+            if (!state.isFirstRun) {
+                hideApiKeyModal();
+            }
+        });
+
+        elements.toggleApiKeyVisibility.addEventListener("click", toggleApiKeyVisibility);
+
+        // Close modal when clicking overlay (only if not required)
+        elements.apiKeyModal.querySelector(".modal__overlay").addEventListener("click", () => {
+            if (!state.isFirstRun && !elements.cancelApiKeyButton.style.display !== "none") {
+                hideApiKeyModal();
+            }
         });
     };
 
@@ -285,6 +512,20 @@
         bindEvents();
         try {
             log("Initializing panel UI.");
+            
+            // Check for stored API key
+            const storedKey = getStoredApiKey();
+            if (storedKey) {
+                state.apiKey = storedKey;
+                log("API key loaded from storage");
+            } else {
+                log("No API key found - first run");
+                state.isFirstRun = true;
+                setLoading(false);
+                showApiKeyModal(true);
+                return;
+            }
+
             await loadHostScript();
             await fetchAssets();
         } catch (error) {

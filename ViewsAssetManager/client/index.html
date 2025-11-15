@@ -12,7 +12,15 @@
     <div class="panel">
         <header class="panel__header">
             <h1>Views Asset Manager</h1>
-            <button id="refreshButton" class="btn btn--ghost" type="button">Refresh</button>
+            <div class="panel__header-actions">
+                <button id="settingsButton" class="btn btn--ghost btn--icon" type="button" title="Settings">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 10a2 2 0 100-4 2 2 0 000 4z"/>
+                        <path d="M6.5 1.5a1.5 1.5 0 00-1.5 1.5v.5a.5.5 0 01-.5.5h-.5a1.5 1.5 0 00-1.5 1.5v1a1.5 1.5 0 001.5 1.5h.5a.5.5 0 01.5.5v.5a1.5 1.5 0 001.5 1.5h1a1.5 1.5 0 001.5-1.5v-.5a.5.5 0 01.5-.5h.5a1.5 1.5 0 001.5-1.5v-1a1.5 1.5 0 00-1.5-1.5h-.5a.5.5 0 01-.5-.5V3a1.5 1.5 0 00-1.5-1.5h-1zm-3 6.5a.5.5 0 01.5-.5h8a.5.5 0 010 1h-8a.5.5 0 01-.5-.5z"/>
+                    </svg>
+                </button>
+                <button id="refreshButton" class="btn btn--ghost" type="button">Refresh</button>
+            </div>
         </header>
 
         <section id="statusArea" class="status status--hidden" role="status"></section>
@@ -23,6 +31,47 @@
         </div>
 
         <section id="assetGrid" class="asset-grid" aria-live="polite"></section>
+    </div>
+
+    <!-- API Key Setup Modal -->
+    <div id="apiKeyModal" class="modal modal--hidden">
+        <div class="modal__overlay"></div>
+        <div class="modal__content">
+            <div class="modal__header">
+                <h2>API Key Setup</h2>
+            </div>
+            <div class="modal__body">
+                <p class="modal__description">
+                    Enter your Views API key to access assets. You can obtain a key from your Views administrator.
+                </p>
+                <form id="apiKeyForm">
+                    <div class="form-group">
+                        <label for="apiKeyInput" class="form-label">API Key</label>
+                        <input 
+                            type="password" 
+                            id="apiKeyInput" 
+                            class="form-input" 
+                            placeholder="Enter your API key"
+                            required
+                            autocomplete="off"
+                        />
+                        <button type="button" id="toggleApiKeyVisibility" class="btn btn--icon btn--small" title="Show/Hide API Key">
+                            <svg id="showKeyIcon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 3C4.5 3 1.5 5.5 0 8c1.5 2.5 4.5 5 8 5s6.5-2.5 8-5c-1.5-2.5-4.5-5-8-5zm0 8a3 3 0 110-6 3 3 0 010 6z"/>
+                            </svg>
+                            <svg id="hideKeyIcon" class="hidden" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M13.5 2.5l-11 11m9-6a3 3 0 11-4.24 4.24M2 8c.5-.83 1.17-1.58 2-2.24M14 8c-.5.83-1.17 1.58-2 2.24"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="apiKeyError" class="form-error form-error--hidden"></div>
+                    <div class="modal__actions">
+                        <button type="button" id="cancelApiKeyButton" class="btn btn--secondary">Cancel</button>
+                        <button type="submit" id="saveApiKeyButton" class="btn btn--primary">Save Key</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <script src="js/CSInterface.js"></script>

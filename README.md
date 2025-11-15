@@ -18,42 +18,16 @@ Copy the `ViewsAssetManager` folder to your CEP extensions directory:
 - **Windows**: `C:\Program Files (x86)\Common Files\Adobe\CEP\extensions\`
 - **macOS**: `/Library/Application Support/Adobe/CEP/extensions/`
 
-### 2. Configure API Key
+### 2. First Launch
 
-The extension requires an API key to authenticate with the Views Asset API.
+When you first launch the extension, you'll be prompted to enter your API key:
 
-#### Option A: Set API Key via Script (Recommended)
+1. Open After Effects
+2. Go to **Window** > **Extensions** > **Views Asset Manager**
+3. Enter your API key in the setup dialog
+4. Click **Save Key** to validate and store your key
 
-Create or edit the file at the following location:
-
-**Windows**: `C:\Program Files (x86)\Common Files\Adobe\CEP\extensions\ViewsAssetManager\client\js\api-config.js`
-
-**macOS**: `/Library/Application Support/Adobe/CEP/extensions/ViewsAssetManager/client/js/api-config.js`
-
-```javascript
-// api-config.js
-window.VIEWS_ASSET_MANAGER_API_KEY = "your-api-key-here";
-```
-
-Then update `index.html` to load this file before `main.js`:
-
-```html
-<script src="js/api-config.js"></script>
-<script src="js/CSInterface.js"></script>
-<script src="js/main.js"></script>
-```
-
-#### Option B: Set API Key in index.html
-
-Edit `ViewsAssetManager/client/index.html` and add the following script before loading `main.js`:
-
-```html
-<script>
-  window.VIEWS_ASSET_MANAGER_API_KEY = "your-api-key-here";
-</script>
-<script src="js/CSInterface.js"></script>
-<script src="js/main.js"></script>
-```
+The extension will automatically validate your API key before saving it. Your key is stored securely in browser localStorage and persists across sessions.
 
 ### 3. Obtaining an API Key
 
@@ -61,6 +35,14 @@ Contact your Views administrator to obtain an API key. The API supports two type
 
 - **Admin Key**: Full access to all API features including key management
 - **User Key**: Access to asset browsing, downloading, and importing (recommended for extensions)
+
+### 4. Managing Your API Key
+
+You can update your API key at any time:
+
+1. Click the **Settings** button (gear icon) in the extension header
+2. Enter your new API key
+3. Click **Save Key** to validate and update
 
 ## API Integration
 
@@ -93,15 +75,22 @@ The extension expects assets in the following format:
 
 1. Open After Effects
 2. Go to **Window** > **Extensions** > **Views Asset Manager**
-3. The extension will automatically load and display available assets
-4. Click **Import** on any asset to add it to your current composition
-5. Use the **Refresh** button to reload the asset catalog
+3. Enter your API key on first launch (if not already configured)
+4. Browse available assets in the grid view
+5. Click **Import** on any asset to add it to your current composition
+6. Use the **Refresh** button to reload the asset catalog
+7. Click the **Settings** button to change your API key
 
 ## Troubleshooting
 
-### "Missing API key" Error
+### "Invalid API key" Error
 
-Make sure you've configured `window.VIEWS_ASSET_MANAGER_API_KEY` before the main script loads. Check the browser console (F12) for detailed error messages.
+Your API key may be incorrect or has been revoked:
+1. Click the Settings button (gear icon)
+2. Enter a valid API key
+3. The extension will validate the key before saving
+
+If the problem persists, contact your administrator for a new key.
 
 ### Assets Not Loading
 
@@ -141,12 +130,16 @@ ViewsAssetManager/
 - `handleAssetDownload()` - Downloads and imports asset into AE
 - `downloadFileAsBase64()` - Converts presigned URL to base64 for temp storage
 - `createAssetCard()` - Renders asset card in the UI
+- `validateApiKey()` - Validates API key against the server
+- `storeApiKey()` / `getStoredApiKey()` - Manages API key storage in localStorage
 
 ## Security Notes
 
-- API keys should be kept secure and not committed to version control
+- API keys are stored in browser localStorage (extension-specific storage)
+- Keys are validated against the API before being saved
 - Consider using user-level API keys rather than admin keys for extensions
 - Presigned download URLs expire after 60 seconds for security
+- API key visibility can be toggled with the eye icon in the setup dialog
 
 ## License
 
