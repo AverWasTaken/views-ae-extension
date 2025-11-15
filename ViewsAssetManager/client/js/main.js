@@ -236,11 +236,14 @@
     };
 
     /**
-     * Downloads a file from a URL and converts it to base64
+     * Downloads a file from a URL and saves it directly to the temp directory
+     * Uses CSInterface filesystem API to avoid memory issues with large files
      * @param {string} url - The URL to download from (presigned URL from API)
-     * @returns {Promise<string>} Base64-encoded file data
+     * @param {string} fileName - Name for the saved file
+     * @returns {Promise<string>} Path to the downloaded file
      */
-    const downloadFileAsBase64 = async (url) => {
+    const downloadFileToTemp = async (url, fileName) => {
+        log("Downloading file from presigned URL...");
         const response = await fetch(url, {
             method: "GET",
             cache: "no-cache"
@@ -250,50 +253,86 @@
             throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
         }
 
-        const blob = await response.blob();
+        const arrayBuffer = await response.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        
+        log(`Downloaded ${(uint8Array.length / 1024 / 1024).toFixed(2)} MB`);
+        
+        // Get temp directory path
+        const tempDir = csInterface.getSystemPath(SystemPath.USER_DATA) + "/ViewsAssetManager";
+        
+        // Create directory using JSX
+        await evalScript(`
+            var folder = new Folder("${escapeForEval(tempDir)}");
+            if (!folder.exists) folder.create();
+            "OK";
+        `);
+        
+        // Build file path
+        const safeName = sanitizeFileName(fileName);
+        const filePath = tempDir + "/" + safeName;
+        
+        log(`Saving to: ${filePath}`);
+        
+        // Write file using CSInterface
         return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const base64 = reader.result.split(",")[1];
-                resolve(base64);
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
+            try {
+                // Convert Uint8Array to base64 for CSInterface.writeFile
+                let binary = "";
+                for (let i = 0; i < uint8Array.length; i++) {
+                    binary += String.fromCharCode(uint8Array[i]);
+                }
+                const base64 = btoa(binary);
+                
+                // Write file
+                const result = csInterface.writeFile(filePath, base64, "Base64");
+                
+                if (result.err === 0) {
+                    log(`File saved successfully: ${filePath}`);
+                    resolve(filePath);
+                } else {
+                    reject(new Error(`Failed to write file: Error code ${result.err}`));
+                }
+            } catch (error) {
+                reject(error);
+            }
         });
     };
 
     const handleAssetDownload = async (asset, button) => {
         setLoading(true);
-        setStatus(`Importing ${asset.name || "asset"}…`, "info");
+        setStatus(`Downloading ${asset.name || "asset"}…`, "info");
         button.disabled = true;
         const originalLabel = button.textContent;
-        button.textContent = "Importing…";
+        button.textContent = "Downloading…";
 
         try {
-            log("Starting download for asset", asset.id);
+            log("Starting import for asset:", asset.id);
+            
+            // Step 1: Get presigned download URL
             const payload = await requestAssetDownload(asset.id);
-
             if (!payload.url) {
                 throw new Error("API did not provide a download URL.");
             }
 
-            log("Downloading asset from presigned URL");
-            const base64Data = await downloadFileAsBase64(payload.url);
-
+            // Step 2: Download and save to temp
+            button.textContent = "Downloading…";
             const fileName = sanitizeFileName(asset.name || "asset");
-            log("Saving asset to temp directory");
-            const importPath = await evalScript(
-                `saveToTemp("${escapeForEval(base64Data)}","${escapeForEval(fileName)}")`
-            );
+            const importPath = await downloadFileToTemp(payload.url, fileName);
 
-            if (!importPath) {
-                throw new Error("Failed to save asset to temporary directory.");
-            }
-
-            log("Importing asset into After Effects");
+            // Step 3: Import into After Effects
+            button.textContent = "Importing…";
+            setStatus(`Importing ${asset.name || "asset"}…`, "info");
+            log("Importing asset into After Effects from:", importPath);
+            
             const result = await evalScript(
                 `importAndAddAsset("${escapeForEval(importPath)}")`
             );
+            
+            if (result && result.indexOf("Error") === 0) {
+                throw new Error(result);
+            }
+            
             log("Asset imported successfully:", asset.id);
             setStatus(result || `${asset.name || "Asset"} imported successfully.`, "success");
         } catch (error) {
