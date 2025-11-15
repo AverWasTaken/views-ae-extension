@@ -1,7 +1,7 @@
 "use strict";
 
 (function () {
-    const API_BASE_URL = "https://api.viewscommunity.com";
+    const API_BASE_URL = "https://api.viewseditors.com/";
     const API_KEY = window.VIEWS_ASSET_MANAGER_API_KEY || "";
     const LOG_PREFIX = "[ViewsAssetManager]";
     const PLACEHOLDER_THUMB =
