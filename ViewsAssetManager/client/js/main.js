@@ -38,7 +38,7 @@
     const state = {
         assets: [],
         folders: [],
-        selectedFolderId: "all", // "all", "null", or folder UUID
+        selectedFolderId: "all", // "all" or folder UUID
         apiKey: "",
         isFirstRun: false
     };
@@ -458,12 +458,10 @@
      * @returns {Object} Map of folderId to count
      */
     const countAssetsByFolder = () => {
-        const counts = { all: state.assets.length, null: 0 };
+        const counts = { all: state.assets.length };
         state.assets.forEach((asset) => {
-            const folderId = asset.folderId || null;
-            if (folderId === null) {
-                counts.null++;
-            } else {
+            const folderId = asset.folderId;
+            if (folderId) {
                 counts[folderId] = (counts[folderId] || 0) + 1;
             }
         });
@@ -477,15 +475,13 @@
     const renderFolders = (folders) => {
         const counts = countAssetsByFolder();
         
-        // Clear existing custom folders (keep "All Assets" and "No Folder")
-        const existingItems = elements.folderList.querySelectorAll('.folder-item:not([data-folder-id="all"]):not([data-folder-id="null"])');
+        // Clear existing custom folders (keep "All Assets")
+        const existingItems = elements.folderList.querySelectorAll('.folder-item:not([data-folder-id="all"])');
         existingItems.forEach(item => item.remove());
 
-        // Update counts for "All Assets" and "No Folder"
+        // Update count for "All Assets"
         const allItem = elements.folderList.querySelector('[data-folder-id="all"] .folder-item__count');
-        const noFolderItem = elements.folderList.querySelector('[data-folder-id="null"] .folder-item__count');
         if (allItem) allItem.textContent = counts.all;
-        if (noFolderItem) noFolderItem.textContent = counts.null;
 
         // Add folder items
         folders.forEach((folder) => {
@@ -525,7 +521,7 @@
 
     /**
      * Selects a folder and filters assets
-     * @param {string} folderId - Folder ID to select ("all", "null", or UUID)
+     * @param {string} folderId - Folder ID to select ("all" or folder UUID)
      */
     const selectFolder = (folderId) => {
         state.selectedFolderId = folderId;
@@ -545,10 +541,7 @@
     const renderFilteredAssets = () => {
         let filteredAssets = state.assets;
         
-        if (state.selectedFolderId === "null") {
-            // Show only assets with no folder
-            filteredAssets = state.assets.filter(asset => !asset.folderId || asset.folderId === null);
-        } else if (state.selectedFolderId !== "all") {
+        if (state.selectedFolderId !== "all") {
             // Show only assets in selected folder
             filteredAssets = state.assets.filter(asset => asset.folderId === state.selectedFolderId);
         }
@@ -791,15 +784,10 @@
             }
         });
 
-        // Bind default folder items
+        // Bind default folder item
         const allAssetsItem = elements.folderList.querySelector('[data-folder-id="all"]');
-        const noFolderItem = elements.folderList.querySelector('[data-folder-id="null"]');
-        
         if (allAssetsItem) {
             allAssetsItem.addEventListener("click", () => selectFolder("all"));
-        }
-        if (noFolderItem) {
-            noFolderItem.addEventListener("click", () => selectFolder("null"));
         }
     };
 
