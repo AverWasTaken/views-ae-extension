@@ -40,6 +40,7 @@
         folders: [],
         selectedFolderId: "all", // "all" or folder UUID
         apiKey: "",
+        deviceId: null, // Cached device ID (generated once)
         isFirstRun: false
     };
 
@@ -179,6 +180,21 @@
     };
 
     /**
+     * Gets the device ID (generates and caches it on first call)
+     * @returns {Promise<string>} The device ID
+     */
+    const ensureDeviceId = async () => {
+        if (!state.deviceId) {
+            if (typeof DeviceId === 'undefined' || typeof DeviceId.getDeviceId !== 'function') {
+                throw new Error("Device ID module not loaded");
+            }
+            state.deviceId = await DeviceId.getDeviceId();
+            log("Device ID generated and cached");
+        }
+        return state.deviceId;
+    };
+
+    /**
      * Validates that an API key is configured
      * @throws {Error} If API key is not set
      */
@@ -194,19 +210,35 @@
      * Makes an authenticated GET request to the API
      * @param {string} path - API endpoint path (e.g., "/assets")
      * @returns {Promise<Object>} Parsed JSON response
-     * @throws {Error} If API key is missing or request fails
+     * @throws {Error} If API key is missing, device limit exceeded, or request fails
      */
     const fetchJson = async (path) => {
         ensureApiKey();
+        const deviceId = await ensureDeviceId();
+
         const response = await fetch(`${API_BASE_URL}${path}`, {
             method: "GET",
             cache: "no-cache",
             headers: {
                 "Content-Type": "application/json",
                 Accept: "application/json",
-                "X-API-Key": state.apiKey
+                "X-API-Key": state.apiKey,
+                "X-Device-ID": deviceId
             }
         });
+
+        // Handle device limit exceeded
+        if (response.status === 403) {
+            throw new Error("This API key is already registered to another device. Please contact your administrator or use a different API key.");
+        }
+
+        // Handle missing device ID (shouldn't happen, but just in case)
+        if (response.status === 400) {
+            const errorText = await response.text();
+            if (errorText.includes("device") || errorText.includes("Device")) {
+                throw new Error("Device identification error. Please restart the extension.");
+            }
+        }
 
         if (!response.ok) {
             throw new Error(`API error ${response.status}: ${response.statusText}`);
@@ -638,32 +670,62 @@
     };
 
     /**
-     * Validates an API key by making a test request
+     * Validates an API key by making a test request with device binding
      * @param {string} apiKey - The API key to validate
-     * @returns {Promise<boolean>} Whether the key is valid
+     * @returns {Promise<boolean>} Whether the key is valid and successfully bound to this device
      */
     const validateApiKey = async (apiKey) => {
         if (!apiKey || apiKey.trim().length === 0) {
             throw new Error("API key cannot be empty");
         }
 
+        // Generate device ID for validation
+        const deviceId = await ensureDeviceId();
+        log(`Testing API key with device ID: ${deviceId.substring(0, 16)}...`);
+
         // Test the key by making a request to the API
         try {
-            log(`Testing API key against ${API_BASE_URL}/assets`);
-            const response = await fetch(`${API_BASE_URL}/assets`, {
+            log(`Validating API key against ${API_BASE_URL}/folders`);
+            const response = await fetch(`${API_BASE_URL}/folders`, {
                 method: "GET",
                 cache: "no-cache",
                 headers: {
                     "Content-Type": "application/json",
                     Accept: "application/json",
-                    "X-API-Key": apiKey
+                    "X-API-Key": apiKey,
+                    "X-Device-ID": deviceId
                 }
             });
 
             log(`Validation response: ${response.status} ${response.statusText}`);
 
+            // Handle different response codes
+            if (response.status === 200 || response.status === 404) {
+                // Success! Key is valid and now bound to this device
+                // (404 just means no folders yet, which is fine)
+                log("API key validated and bound to this device");
+                return true;
+            }
+
             if (response.status === 401) {
                 throw new Error("Invalid API key. Please check and try again.");
+            }
+
+            if (response.status === 403) {
+                // Key is already bound to a different device
+                throw new Error("This API key is already registered to another device. Please use a different key or contact your administrator.");
+            }
+
+            if (response.status === 400) {
+                // Missing or invalid device ID
+                let errorDetails = "";
+                try {
+                    const errorData = await response.json();
+                    errorDetails = errorData.message || errorData.error || "";
+                } catch (e) {
+                    // Ignore JSON parse errors
+                }
+                throw new Error(`Validation error: ${errorDetails || "Invalid request. Please try again."}`);
             }
 
             if (response.status === 500) {
@@ -678,17 +740,15 @@
                 throw new Error(`Server error (500)${errorDetails ? ": " + errorDetails : ". Please try again later or contact support."}`);
             }
 
-            if (!response.ok && response.status !== 404) {
-                throw new Error(`API error ${response.status}: ${response.statusText}`);
-            }
-
-            // 200 or 404 are both acceptable (404 just means no assets yet)
-            return true;
+            // Other errors
+            throw new Error(`API error ${response.status}: ${response.statusText}`);
         } catch (error) {
             // Re-throw our custom errors
             if (error.message.includes("API error") || 
                 error.message.includes("Invalid API key") || 
-                error.message.includes("Server error")) {
+                error.message.includes("already registered") ||
+                error.message.includes("Server error") ||
+                error.message.includes("Validation error")) {
                 throw error;
             }
             
