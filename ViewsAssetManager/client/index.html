@@ -25,12 +25,40 @@
 
         <section id="statusArea" class="status status--hidden" role="status"></section>
 
-        <div id="spinner" class="spinner spinner--hidden">
-            <div class="spinner__ring"></div>
-            <p>Loading assets...</p>
-        </div>
+        <div class="panel__content">
+            <!-- Folder Sidebar -->
+            <aside class="folder-sidebar">
+                <div class="folder-sidebar__header">
+                    <h2>Folders</h2>
+                </div>
+                <ul id="folderList" class="folder-list">
+                    <li class="folder-item folder-item--active" data-folder-id="all">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                            <path d="M2 3h10v8H2z"/>
+                        </svg>
+                        <span class="folder-item__name">All Assets</span>
+                        <span class="folder-item__count">0</span>
+                    </li>
+                    <li class="folder-item" data-folder-id="null">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                            <path d="M1 3h5l1 1h5v7H1z"/>
+                        </svg>
+                        <span class="folder-item__name">No Folder</span>
+                        <span class="folder-item__count">0</span>
+                    </li>
+                </ul>
+            </aside>
 
-        <section id="assetGrid" class="asset-grid" aria-live="polite"></section>
+            <!-- Main Content Area -->
+            <main class="main-content">
+                <div id="spinner" class="spinner spinner--hidden">
+                    <div class="spinner__ring"></div>
+                    <p>Loading assets...</p>
+                </div>
+
+                <section id="assetGrid" class="asset-grid" aria-live="polite"></section>
+            </main>
+        </div>
     </div>
 
     <!-- API Key Setup Modal -->

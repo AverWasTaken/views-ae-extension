@@ -23,6 +23,7 @@
         status: document.getElementById("statusArea"),
         refreshButton: document.getElementById("refreshButton"),
         settingsButton: document.getElementById("settingsButton"),
+        folderList: document.getElementById("folderList"),
         apiKeyModal: document.getElementById("apiKeyModal"),
         apiKeyForm: document.getElementById("apiKeyForm"),
         apiKeyInput: document.getElementById("apiKeyInput"),
@@ -36,6 +37,8 @@
 
     const state = {
         assets: [],
+        folders: [],
+        selectedFolderId: "all", // "all", "null", or folder UUID
         apiKey: "",
         isFirstRun: false
     };
@@ -212,9 +215,30 @@
     };
 
     /**
+     * Fetches folders from the API
+     * Expected response format: { folders: [{id, name, createdAt}] }
+     */
+    const fetchFolders = async () => {
+        try {
+            log("Fetching folders.");
+            const data = await fetchJson("/folders");
+            const folders = Array.isArray(data) ? data : data.folders || [];
+            state.folders = folders;
+            renderFolders(folders);
+            log(`Loaded ${folders.length} folders.`);
+            return folders;
+        } catch (error) {
+            console.error(LOG_PREFIX, "Failed to load folders", error);
+            state.folders = [];
+            renderFolders([]);
+            return [];
+        }
+    };
+
+    /**
      * Fetches the asset catalog from the API
      * Expected response format: { assets: [...] }
-     * Each asset contains: id, name, size, thumbnail, uploadDate
+     * Each asset contains: id, name, size, thumbnail, uploadDate, folderId
      */
     const fetchAssets = async () => {
         setLoading(true);
@@ -224,12 +248,13 @@
             const data = await fetchJson("/assets");
             const assets = Array.isArray(data) ? data : data.assets || [];
             state.assets = assets;
-            renderAssets(assets);
+            renderFilteredAssets();
             log(`Loaded ${assets.length} assets.`);
             setStatus(`${assets.length} assets ready.`, "success");
         } catch (error) {
             console.error(LOG_PREFIX, "Failed to load assets", error);
-            renderAssets([]);
+            state.assets = [];
+            renderFilteredAssets();
             setStatus(error.message || "Unable to load assets.", "error");
         } finally {
             setLoading(false);
@@ -428,13 +453,122 @@
         }
     };
 
+    /**
+     * Counts assets per folder
+     * @returns {Object} Map of folderId to count
+     */
+    const countAssetsByFolder = () => {
+        const counts = { all: state.assets.length, null: 0 };
+        state.assets.forEach((asset) => {
+            const folderId = asset.folderId || null;
+            if (folderId === null) {
+                counts.null++;
+            } else {
+                counts[folderId] = (counts[folderId] || 0) + 1;
+            }
+        });
+        return counts;
+    };
+
+    /**
+     * Renders the folder list in the sidebar
+     * @param {Array} folders - Array of folder objects
+     */
+    const renderFolders = (folders) => {
+        const counts = countAssetsByFolder();
+        
+        // Clear existing custom folders (keep "All Assets" and "No Folder")
+        const existingItems = elements.folderList.querySelectorAll('.folder-item:not([data-folder-id="all"]):not([data-folder-id="null"])');
+        existingItems.forEach(item => item.remove());
+
+        // Update counts for "All Assets" and "No Folder"
+        const allItem = elements.folderList.querySelector('[data-folder-id="all"] .folder-item__count');
+        const noFolderItem = elements.folderList.querySelector('[data-folder-id="null"] .folder-item__count');
+        if (allItem) allItem.textContent = counts.all;
+        if (noFolderItem) noFolderItem.textContent = counts.null;
+
+        // Add folder items
+        folders.forEach((folder) => {
+            const li = document.createElement("li");
+            li.className = "folder-item";
+            li.dataset.folderId = folder.id;
+            
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute("width", "14");
+            svg.setAttribute("height", "14");
+            svg.setAttribute("viewBox", "0 0 14 14");
+            svg.setAttribute("fill", "currentColor");
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", "M1 3h5l1 1h5v7H1z");
+            svg.appendChild(path);
+
+            const nameSpan = document.createElement("span");
+            nameSpan.className = "folder-item__name";
+            nameSpan.textContent = folder.name;
+            nameSpan.title = folder.name;
+
+            const countSpan = document.createElement("span");
+            countSpan.className = "folder-item__count";
+            countSpan.textContent = counts[folder.id] || 0;
+
+            li.appendChild(svg);
+            li.appendChild(nameSpan);
+            li.appendChild(countSpan);
+            
+            li.addEventListener("click", () => selectFolder(folder.id));
+            
+            elements.folderList.appendChild(li);
+        });
+
+        log(`Rendered ${folders.length} folders.`);
+    };
+
+    /**
+     * Selects a folder and filters assets
+     * @param {string} folderId - Folder ID to select ("all", "null", or UUID)
+     */
+    const selectFolder = (folderId) => {
+        state.selectedFolderId = folderId;
+        
+        // Update active state in UI
+        elements.folderList.querySelectorAll(".folder-item").forEach((item) => {
+            item.classList.toggle("folder-item--active", item.dataset.folderId === folderId);
+        });
+        
+        log(`Selected folder: ${folderId}`);
+        renderFilteredAssets();
+    };
+
+    /**
+     * Filters and renders assets based on selected folder
+     */
+    const renderFilteredAssets = () => {
+        let filteredAssets = state.assets;
+        
+        if (state.selectedFolderId === "null") {
+            // Show only assets with no folder
+            filteredAssets = state.assets.filter(asset => !asset.folderId || asset.folderId === null);
+        } else if (state.selectedFolderId !== "all") {
+            // Show only assets in selected folder
+            filteredAssets = state.assets.filter(asset => asset.folderId === state.selectedFolderId);
+        }
+        
+        renderAssets(filteredAssets);
+    };
+
+    /**
+     * Renders assets to the grid
+     * @param {Array} assets - Array of asset objects to render
+     */
     const renderAssets = (assets) => {
         elements.grid.innerHTML = "";
 
         if (!assets.length) {
             const empty = document.createElement("p");
             empty.className = "asset-grid__empty";
-            empty.textContent = "No assets available.";
+            empty.textContent = state.selectedFolderId === "all" 
+                ? "No assets available." 
+                : "No assets in this folder.";
             elements.grid.appendChild(empty);
             return;
         }
@@ -444,7 +578,7 @@
             fragment.appendChild(createAssetCard(asset));
         });
         elements.grid.appendChild(fragment);
-        log("Rendered asset grid.");
+        log(`Rendered ${assets.length} assets.`);
     };
 
     /**
@@ -604,9 +738,11 @@
             if (state.isFirstRun) {
                 state.isFirstRun = false;
                 setStatus("API key configured successfully!", "success");
-                await fetchAssets();
+                await loadHostScript();
+                await Promise.all([fetchFolders(), fetchAssets()]);
             } else {
                 setStatus("API key updated successfully!", "success");
+                await Promise.all([fetchFolders(), fetchAssets()]);
             }
         } catch (error) {
             console.error(LOG_PREFIX, "API key validation failed:", error);
@@ -628,9 +764,9 @@
     };
 
     const bindEvents = () => {
-        elements.refreshButton.addEventListener("click", () => {
+        elements.refreshButton.addEventListener("click", async () => {
             log("Manual refresh requested.");
-            fetchAssets();
+            await Promise.all([fetchFolders(), fetchAssets()]);
         });
 
         elements.settingsButton.addEventListener("click", () => {
@@ -654,6 +790,17 @@
                 hideApiKeyModal();
             }
         });
+
+        // Bind default folder items
+        const allAssetsItem = elements.folderList.querySelector('[data-folder-id="all"]');
+        const noFolderItem = elements.folderList.querySelector('[data-folder-id="null"]');
+        
+        if (allAssetsItem) {
+            allAssetsItem.addEventListener("click", () => selectFolder("all"));
+        }
+        if (noFolderItem) {
+            noFolderItem.addEventListener("click", () => selectFolder("null"));
+        }
     };
 
     const init = async () => {
@@ -675,7 +822,9 @@
             }
 
             await loadHostScript();
-            await fetchAssets();
+            
+            // Fetch folders and assets in parallel
+            await Promise.all([fetchFolders(), fetchAssets()]);
         } catch (error) {
             console.error(LOG_PREFIX, "Initialization failed", error);
             setStatus(error.message || "Initialization failed.", "error");
