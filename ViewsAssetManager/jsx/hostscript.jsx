@@ -85,17 +85,46 @@
         return sanitized;
     }
 
+    function getCacheFolder() {
+        var folder = new Folder(Folder.temp.fsName + "/ViewsAssetManager");
+        if (!folder.exists) {
+            folder.create();
+        }
+        return folder;
+    }
+
+    function cleanupOldCacheFiles() {
+        try {
+            var folder = getCacheFolder();
+            var files = folder.getFiles();
+            if (!files) return;
+
+            var now = new Date();
+            // 3 days in milliseconds
+            var maxAge = 3 * 24 * 60 * 60 * 1000;
+            
+            for (var i = 0; i < files.length; i++) {
+                var file = files[i];
+                if (file instanceof File) {
+                    var age = now.getTime() - file.modified.getTime();
+                    if (age > maxAge) {
+                        file.remove();
+                        // log("Removed old cache file: " + file.name);
+                    }
+                }
+            }
+        } catch (e) {
+            log("Cleanup error: " + e.toString());
+        }
+    }
+
     function saveToTemp(base64Data, fileName) {
         try {
             if (!base64Data) {
                 throw new Error("Missing base64 data.");
             }
 
-            var folder = new Folder(Folder.temp.fsName + "/ViewsAssetManager");
-            if (!folder.exists) {
-                folder.create();
-            }
-
+            var folder = getCacheFolder();
             var safeName = sanitizeFileName(fileName);
             var filePath = folder.fsName + "/" + safeName;
             var file = new File(filePath);
@@ -179,5 +208,8 @@
     $.global.importAndAddAsset = importAndAddAsset;
     $.global.getActiveComp = getActiveComp;
     $.global.saveToTemp = saveToTemp;
+
+    // Run cleanup on load
+    cleanupOldCacheFiles();
 })();
 

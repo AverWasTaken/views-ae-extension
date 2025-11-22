@@ -571,6 +571,100 @@
      * @param {Function} onProgress - Optional callback (downloaded, total) => void
      * @returns {Promise<string>} Absolute path to the downloaded file
      */
+    const validatePngFile = async (filePath, fs) => {
+        return new Promise((resolve, reject) => {
+            try {
+                // Read the first 16 bytes to be safe
+                const fd = fs.openSync(filePath, 'r');
+                const buffer = Buffer.alloc(16);
+                const bytesRead = fs.readSync(fd, buffer, 0, 16, 0);
+                fs.closeSync(fd);
+
+                if (bytesRead < 4) {
+                    reject(new Error("File is too small to be a PNG"));
+                    return;
+                }
+
+                // Convert to hex for easier checking and debugging
+                const hex = buffer.toString('hex').toUpperCase();
+                
+                // Standard signature: 89 50 4E 47 0D 0A 1A 0A
+                // Check for "PNG" sequence (50 4E 47) anywhere in the header
+                if (hex.includes("504E47")) {
+                    if (!hex.startsWith("89504E47")) {
+                        log("Strict PNG check failed but 'PNG' found. Hex: " + hex);
+                    }
+                    resolve(true);
+                    return;
+                }
+
+                // If we fail here, generate a helpful error with the Hex dump
+                const snippetBuffer = Buffer.alloc(200);
+                const snippetFd = fs.openSync(filePath, 'r');
+                fs.readSync(snippetFd, snippetBuffer, 0, 200, 0);
+                fs.closeSync(snippetFd);
+                const snippet = snippetBuffer.toString('utf8').replace(/\0/g, '');
+
+                reject(new Error(`Downloaded file does not appear to be a valid PNG.\nHex Header: ${hex}\nContent Start: "${snippet}"`));
+            } catch (err) {
+                reject(new Error("Failed to validate PNG file: " + err.message));
+            }
+        });
+    };
+
+    /**
+     * Loads the PNG into an HTML Canvas and re-exports it.
+     * This "sanitizes" the PNG, fixing corruption, CMYK issues, or weird compression that AE hates.
+     */
+    const repairPngWithCanvas = async (filePath, fs) => {
+        return new Promise((resolve) => {
+            log("Attempting to repair/normalize PNG via Canvas...");
+            const img = new Image();
+            
+            // 5s timeout
+            const timeout = setTimeout(() => {
+                log("Image load timed out during repair.");
+                resolve(false);
+            }, 5000);
+
+            img.onload = () => {
+                clearTimeout(timeout);
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    const dataUrl = canvas.toDataURL('image/png');
+                    const base64Data = dataUrl.replace(/^data:image\/png;base64,/, "");
+                    const buffer = Buffer.from(base64Data, 'base64');
+                    
+                    fs.writeFileSync(filePath, buffer);
+                    
+                    log("Successfully repaired PNG via Canvas.");
+                    resolve(true);
+                } catch (e) {
+                    log("Error repairing PNG: " + e.message);
+                    resolve(false);
+                }
+            };
+            
+            img.onerror = (e) => {
+                clearTimeout(timeout);
+                log("Image failed to load for repair (browser cannot read it): " + e);
+                resolve(false); 
+            };
+
+            // Add random query param to prevent browser caching
+            const cacheBust = "?t=" + new Date().getTime();
+            // Handle Windows/Mac paths for file URL
+            const normalizedPath = filePath.replace(/\\/g, "/");
+            const prefix = normalizedPath.startsWith("/") ? "file://" : "file:///";
+            img.src = prefix + normalizedPath + cacheBust;
+        });
+    };
+
     const downloadFileToTemp = async (downloadUrl, fileName, headers = {}, onProgress) => {
         const safeName = sanitizeFileName(fileName);
 
@@ -599,51 +693,75 @@
                     const filePath = path.join(tempDir, safeName);
                     const fileStream = fs.createWriteStream(filePath);
                     
-                    // Parse URL to handle options correctly
-                    const urlObj = new URL(downloadUrl);
-                    const options = {
-                        hostname: urlObj.hostname,
-                        port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
-                        path: urlObj.pathname + urlObj.search,
-                        method: 'GET',
-                        headers: headers
-                    };
+                    const makeRequest = (url) => {
+                        // Parse URL to handle options correctly
+                        const urlObj = new URL(url);
+                        const options = {
+                            hostname: urlObj.hostname,
+                            port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
+                            path: urlObj.pathname + urlObj.search,
+                            method: 'GET',
+                            headers: headers
+                        };
+    
+                        const client = urlObj.protocol === "https:" ? https : http;
+    
+                        const request = client.get(options, (response) => {
+                            // Handle Redirects
+                            if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+                                log(`Redirecting to ${response.headers.location}...`);
+                                request.destroy(); // Stop current request
+                                makeRequest(response.headers.location); // Recurse
+                                return;
+                            }
 
-                    const client = urlObj.protocol === "https:" ? https : http;
+                            if (response.statusCode !== 200) {
+                                const message = "Failed to download file: " + response.statusCode + " " + (response.statusMessage || "");
+                                response.resume();
+                                reject(new Error(message));
+                                return;
+                            }
+    
+                            // Remove data listener to avoid potential stream consumption issues
+                            // response.on("data", ...);
+    
+                            response.pipe(fileStream);
+    
+                            fileStream.on("finish", function () {
+                                fileStream.close(async function () {
+                                    try {
+                                        // Validate the file is actually a PNG
+                                        // await validatePngFile(filePath, fs);
+                                        
+                                        // Repair the PNG to ensure AE compatibility (fixes CMYK, corruption, weird headers)
+                                        await repairPngWithCanvas(filePath, fs);
 
-                    let downloadedBytes = 0;
-                    const request = client.get(options, (response) => {
-                        if (response.statusCode !== 200) {
-                            const message = "Failed to download file: " + response.statusCode + " " + (response.statusMessage || "");
-                            response.resume();
-                            reject(new Error(message));
-                            return;
-                        }
-
-                        // Remove data listener to avoid potential stream consumption issues
-                        // response.on("data", ...);
-
-                        response.pipe(fileStream);
-
-                        fileStream.on("finish", function () {
-                            fileStream.close(function () {
-                                // Normalize path to forward slashes for ExtendScript compatibility
-                                const normalizedPath = filePath.replace(/\\/g, "/");
-                                log("Downloaded file to temp: " + normalizedPath);
-                                resolve(normalizedPath);
+                                        // Normalize path to forward slashes for ExtendScript compatibility
+                                        const normalizedPath = filePath.replace(/\\/g, "/");
+                                        log("Downloaded and validated file: " + normalizedPath);
+                                        resolve(normalizedPath);
+                                    } catch (validationError) {
+                                        // Delete invalid file
+                                        try { fs.unlinkSync(filePath); } catch(e) {}
+                                        reject(validationError);
+                                    }
+                                });
                             });
                         });
-                    });
+    
+                        request.on("error", function (error) {
+                            try {
+                                fileStream.close();
+                                fs.unlinkSync(filePath);
+                            } catch (e) {
+                                // ignore cleanup errors
+                            }
+                            reject(error);
+                        });
+                    };
 
-                    request.on("error", function (error) {
-                        try {
-                            fileStream.close();
-                            fs.unlinkSync(filePath);
-                        } catch (e) {
-                            // ignore cleanup errors
-                        }
-                        reject(error);
-                    });
+                    makeRequest(downloadUrl);
+
                 } catch (error) {
                     reject(error);
                 }
@@ -720,23 +838,17 @@
         try {
             log("Starting import for asset:", asset.id);
             
-            // Use cached endpoint for downloads (faster, no S3 cost)
-            // The endpoint handles S3 fallback if not in Redis
-            const encodedId = encodeURIComponent(asset.id);
-            const downloadUrl = `${API_BASE_URL}/assets/${encodedId}/cached`;
-            
-            // We must pass auth headers for the internal API
-            const deviceId = await ensureDeviceId();
-            const headers = {
-                "X-API-Key": state.apiKey,
-                "X-Device-ID": deviceId
-            };
+            // Step 1: Get presigned download URL (Restoring behavior from mainold.js)
+            const payload = await requestAssetDownload(asset.id);
+            if (!payload.url) {
+                throw new Error("API did not provide a download URL.");
+            }
 
-            // Download directly from the cached endpoint
+            // Step 2: Download the file
+            // Note: We do NOT pass X-API-Key headers here because the presigned URL 
+            // already contains authorization params, and sending headers to S3 can cause errors.
             const fileName = sanitizeFileName(asset.name || "asset");
             
-            // NOTE: Node.js progress is disabled for stability (stream conflict risk)
-            // We use indeterminate loading state instead
             const onProgress = (downloaded, total) => {
                 if (total > 0) {
                     const percent = (downloaded / total) * 100;
@@ -747,11 +859,11 @@
                 }
             };
 
-            const importPath = await downloadFileToTemp(downloadUrl, fileName, headers, onProgress);
+            const importPath = await downloadFileToTemp(payload.url, fileName, {}, onProgress);
 
             // Small delay to ensure file is fully written and OS buffers are flushed
             // This helps prevent file lock and read errors
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
             // Import into After Effects
             LoadingOverlay.show(`Importing ${displayName}`, "Adding to project...");
