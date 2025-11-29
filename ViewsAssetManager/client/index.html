@@ -16,10 +16,15 @@
                 <h1>Views Asset Manager</h1>
             </div>
             <div class="panel__header-actions">
+                <button id="feedbackButton" class="btn btn--ghost btn--icon hidden" type="button" title="Send Feedback">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                </button>
                 <button id="settingsButton" class="btn btn--ghost btn--icon" type="button" title="Settings">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M8 10a2 2 0 100-4 2 2 0 000 4z"/>
-                        <path d="M6.5 1.5a1.5 1.5 0 00-1.5 1.5v.5a.5.5 0 01-.5.5h-.5a1.5 1.5 0 00-1.5 1.5v1a1.5 1.5 0 001.5 1.5h.5a.5.5 0 01.5.5v.5a1.5 1.5 0 001.5 1.5h1a1.5 1.5 0 001.5-1.5v-.5a.5.5 0 01.5-.5h.5a1.5 1.5 0 001.5-1.5v-1a1.5 1.5 0 00-1.5-1.5h-.5a.5.5 0 01-.5-.5V3a1.5 1.5 0 00-1.5-1.5h-1zm-3 6.5a.5.5 0 01.5-.5h8a.5.5 0 010 1h-8a.5.5 0 01-.5-.5z"/>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                     </svg>
                 </button>
                 <button id="refreshButton" class="btn btn--ghost" type="button">Refresh</button>
@@ -47,9 +52,50 @@
 
             <!-- Main Content Area -->
             <main class="main-content">
+                <!-- Search Bar & Controls -->
+                <div class="search-container">
+                    <div class="search-row">
+                        <div class="search-input-wrapper">
+                            <svg class="search-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                            </svg>
+                            <input 
+                                type="text" 
+                                id="searchInput" 
+                                class="search-input" 
+                                placeholder="Search assets..."
+                                autocomplete="off"
+                            />
+                            <button type="button" id="clearSearchBtn" class="search-clear-btn hidden" title="Clear search">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="grid-size-toggle" title="Grid size">
+                            <button type="button" id="gridSmall" class="grid-size-btn" data-size="small" title="Small">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm8 0A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3z"/>
+                                </svg>
+                            </button>
+                            <button type="button" id="gridMedium" class="grid-size-btn grid-size-btn--active" data-size="medium" title="Medium">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M1 2a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V2zM1 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V7zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V7zM1 12a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1v-2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-2z"/>
+                                </svg>
+                            </button>
+                            <button type="button" id="gridLarge" class="grid-size-btn" data-size="large" title="Large">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h11A1.5 1.5 0 0 1 15 2.5v11a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 13.5v-11z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="searchStats" class="search-stats"></div>
+                </div>
+
                 <div id="spinner" class="spinner spinner--hidden">
                     <div class="spinner__ring"></div>
-                    <p>Loading assets. This will take a while on first boot.</p>
+                    <p>Loading assets...</p>
                 </div>
 
                 <section id="assetGrid" class="asset-grid" aria-live="polite"></section>
@@ -66,7 +112,7 @@
             </div>
             <div class="modal__body">
                 <p class="modal__description">
-                    Enter your Views API key to access assets. You can obtain a key from your Views administrator.
+                    Enter your Views API key to access assets. You should have one in your DM's from the bot. If not, create a support ticket in the <a href="https://discord.gg/views" target="_blank">Views Discord</a>.
                 </p>
                 <form id="apiKeyForm">
                     <div class="form-group">
@@ -92,6 +138,100 @@
                     <div class="modal__actions">
                         <button type="button" id="cancelApiKeyButton" class="btn btn--secondary">Cancel</button>
                         <button type="submit" id="saveApiKeyButton" class="btn btn--primary">Save Key</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div id="previewModal" class="modal modal--hidden">
+        <div class="modal__overlay"></div>
+        <button type="button" id="previewPrevBtn" class="preview-nav preview-nav--prev" title="Previous (←)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+        </button>
+        <button type="button" id="previewNextBtn" class="preview-nav preview-nav--next" title="Next (→)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+        </button>
+        <div class="modal__content modal__content--preview">
+            <div class="preview-header">
+                <h2 id="previewTitle">Asset Preview</h2>
+                <button type="button" id="closePreviewBtn" class="btn btn--ghost btn--icon" title="Close (Esc)">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="preview-body">
+                <img id="previewImage" class="preview-image" src="" alt="Asset preview" />
+            </div>
+            <div class="preview-footer">
+                <span class="preview-hint">← → Navigate • Enter Import • Esc Close</span>
+                <button type="button" id="previewImportBtn" class="btn btn--primary">Import</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Multi-Select Action Bar -->
+    <div id="selectionBar" class="selection-bar selection-bar--hidden">
+        <div class="selection-bar__info">
+            <span id="selectionCount">0</span> selected
+        </div>
+        <div class="selection-bar__actions">
+            <button type="button" id="clearSelectionBtn" class="btn btn--secondary btn--small">Clear</button>
+            <button type="button" id="importSelectedBtn" class="btn btn--primary btn--small">Import Selected</button>
+        </div>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div id="feedbackModal" class="modal modal--hidden">
+        <div class="modal__overlay"></div>
+        <div class="modal__content">
+            <div class="modal__header">
+                <h2>Send Feedback</h2>
+            </div>
+            <div class="modal__body">
+                <p class="modal__description">
+                    Report a bug, suggest a feature, or share any feedback. Your message will be sent to the Views team.
+                </p>
+                <form id="feedbackForm">
+                    <div class="form-group">
+                        <label for="feedbackType" class="form-label">Type</label>
+                        <select id="feedbackType" class="form-input form-select">
+                            <option value="bug">Bug Report</option>
+                            <option value="feature">Feature Request</option>
+                            <option value="feedback">General Feedback</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="feedbackMessage" class="form-label">Message <span class="form-required">*</span></label>
+                        <textarea 
+                            id="feedbackMessage" 
+                            class="form-input form-textarea" 
+                            placeholder="Describe your issue or feedback..."
+                            rows="4"
+                            required
+                        ></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="feedbackDiscord" class="form-label">Discord Username <span class="form-optional">(optional)</span></label>
+                        <input 
+                            type="text" 
+                            id="feedbackDiscord" 
+                            class="form-input" 
+                            placeholder="e.g. username#1234 or username"
+                            autocomplete="off"
+                        />
+                    </div>
+                    <div id="feedbackError" class="form-error form-error--hidden"></div>
+                    <div id="feedbackSuccess" class="form-success form-success--hidden"></div>
+                    <div class="modal__actions">
+                        <button type="button" id="cancelFeedbackButton" class="btn btn--secondary">Cancel</button>
+                        <button type="submit" id="submitFeedbackButton" class="btn btn--primary">Send Feedback</button>
                     </div>
                 </form>
             </div>

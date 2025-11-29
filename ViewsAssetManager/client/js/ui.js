@@ -20,6 +20,38 @@
         refreshButton: document.getElementById("refreshButton"),
         settingsButton: document.getElementById("settingsButton"),
         folderList: document.getElementById("folderList"),
+        searchInput: document.getElementById("searchInput"),
+        clearSearchBtn: document.getElementById("clearSearchBtn"),
+        searchStats: document.getElementById("searchStats"),
+        // Preview modal
+        previewModal: document.getElementById("previewModal"),
+        previewTitle: document.getElementById("previewTitle"),
+        previewImage: document.getElementById("previewImage"),
+        closePreviewBtn: document.getElementById("closePreviewBtn"),
+        previewImportBtn: document.getElementById("previewImportBtn"),
+        previewPrevBtn: document.getElementById("previewPrevBtn"),
+        previewNextBtn: document.getElementById("previewNextBtn"),
+        // Grid size buttons
+        gridSmall: document.getElementById("gridSmall"),
+        gridMedium: document.getElementById("gridMedium"),
+        gridLarge: document.getElementById("gridLarge"),
+        // Selection bar
+        selectionBar: document.getElementById("selectionBar"),
+        selectionCount: document.getElementById("selectionCount"),
+        clearSelectionBtn: document.getElementById("clearSelectionBtn"),
+        importSelectedBtn: document.getElementById("importSelectedBtn"),
+        // Feedback modal
+        feedbackButton: document.getElementById("feedbackButton"),
+        feedbackModal: document.getElementById("feedbackModal"),
+        feedbackForm: document.getElementById("feedbackForm"),
+        feedbackType: document.getElementById("feedbackType"),
+        feedbackMessage: document.getElementById("feedbackMessage"),
+        feedbackDiscord: document.getElementById("feedbackDiscord"),
+        feedbackError: document.getElementById("feedbackError"),
+        feedbackSuccess: document.getElementById("feedbackSuccess"),
+        cancelFeedbackButton: document.getElementById("cancelFeedbackButton"),
+        submitFeedbackButton: document.getElementById("submitFeedbackButton"),
+        // API Key modal
         apiKeyModal: document.getElementById("apiKeyModal"),
         apiKeyForm: document.getElementById("apiKeyForm"),
         apiKeyInput: document.getElementById("apiKeyInput"),
@@ -215,34 +247,98 @@
     /**
      * Creates an asset card element for the grid
      * @param {Object} asset - Asset data from API (id, name, size, thumbnail, uploadDate)
-     * @param {Function} onImport - Callback for import button
+     * @param {Object} callbacks - Callbacks object with onImport, onPreview, onSelect
      * @returns {HTMLElement} Article element containing the asset card
      */
-    const createAssetCard = (asset, onImport) => {
+    const createAssetCard = (asset, callbacks) => {
+        const { onImport, onPreview, onSelect, isSelected } = callbacks;
+        
         const card = document.createElement("article");
-        card.className = "asset-card";
+        card.className = "asset-card" + (isSelected ? " asset-card--selected" : "");
+        card.dataset.assetId = asset.id;
         const displayName = Utils.getDisplayName(asset.name || asset.id);
+
+        // Selection checkbox
+        const checkbox = document.createElement("div");
+        checkbox.className = "asset-card__select";
+        checkbox.title = "Select for batch import";
+        const checkIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        checkIcon.setAttribute("width", "12");
+        checkIcon.setAttribute("height", "12");
+        checkIcon.setAttribute("viewBox", "0 0 16 16");
+        checkIcon.setAttribute("fill", "currentColor");
+        const checkPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        checkPath.setAttribute("d", "M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z");
+        checkIcon.appendChild(checkPath);
+        checkbox.appendChild(checkIcon);
+        checkbox.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (onSelect) onSelect(asset, card);
+        });
 
         const img = document.createElement("img");
         img.className = "asset-card__thumb";
         img.alt = displayName || "Asset thumbnail";
         img.src = asset.thumbnail || PLACEHOLDER_THUMB;
         img.loading = "lazy";
+        // Click on image opens preview, double-click imports
+        img.style.cursor = "pointer";
+        img.addEventListener("click", () => {
+            if (onPreview) onPreview(asset);
+        });
+        img.addEventListener("dblclick", (e) => {
+            e.preventDefault();
+            // Find the import button and trigger import
+            const importBtn = card.querySelector(".asset-card__cta:not(.asset-card__cta--preview)");
+            if (onImport && importBtn) onImport(asset, importBtn);
+        });
 
         const title = document.createElement("p");
         title.className = "asset-card__title";
         title.textContent = displayName || "Untitled asset";
-        title.title = displayName; // Tooltip for full name
+        title.title = displayName;
 
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "asset-card__cta";
-        button.textContent = "Import";
-        button.addEventListener("click", () => onImport(asset, button));
+        // Actions container
+        const actions = document.createElement("div");
+        actions.className = "asset-card__actions";
 
+        // Preview button
+        const previewBtn = document.createElement("button");
+        previewBtn.type = "button";
+        previewBtn.className = "asset-card__cta asset-card__cta--preview";
+        previewBtn.title = "Preview";
+        const eyeIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        eyeIcon.setAttribute("width", "14");
+        eyeIcon.setAttribute("height", "14");
+        eyeIcon.setAttribute("viewBox", "0 0 16 16");
+        eyeIcon.setAttribute("fill", "currentColor");
+        const eyePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        eyePath.setAttribute("d", "M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z");
+        const eyePath2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        eyePath2.setAttribute("d", "M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z");
+        eyeIcon.appendChild(eyePath);
+        eyeIcon.appendChild(eyePath2);
+        previewBtn.appendChild(eyeIcon);
+        previewBtn.addEventListener("click", () => {
+            if (onPreview) onPreview(asset);
+        });
+
+        // Import button
+        const importBtn = document.createElement("button");
+        importBtn.type = "button";
+        importBtn.className = "asset-card__cta";
+        importBtn.textContent = "Import";
+        importBtn.addEventListener("click", () => {
+            if (onImport) onImport(asset, importBtn);
+        });
+
+        actions.appendChild(previewBtn);
+        actions.appendChild(importBtn);
+
+        card.appendChild(checkbox);
         card.appendChild(img);
         card.appendChild(title);
-        card.appendChild(button);
+        card.appendChild(actions);
         return card;
     };
 
@@ -250,24 +346,66 @@
      * Renders assets to the grid
      * @param {Array} assets - Array of asset objects to render
      * @param {string} selectedFolderId - ID of the current folder
-     * @param {Function} onImport - Callback for import
+     * @param {Object} callbacks - Callbacks object with onImport, onPreview, onSelect, getSelectedIds
+     * @param {string} [searchQuery] - Optional search query for empty state message
      */
-    const renderAssets = (assets, selectedFolderId, onImport) => {
+    const renderAssets = (assets, selectedFolderId, callbacks, searchQuery = "") => {
         elements.grid.innerHTML = "";
 
         if (!assets.length) {
-            const empty = document.createElement("p");
+            const empty = document.createElement("div");
             empty.className = "asset-grid__empty";
-            empty.textContent = selectedFolderId === "all" 
-                ? "No assets available." 
-                : "No assets in this folder.";
+            
+            // Add icon
+            const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            icon.setAttribute("class", "asset-grid__empty-icon");
+            icon.setAttribute("viewBox", "0 0 24 24");
+            icon.setAttribute("fill", "currentColor");
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            
+            if (searchQuery) {
+                // Search icon for no results
+                path.setAttribute("d", "M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z");
+            } else {
+                // Folder icon for empty folder
+                path.setAttribute("d", "M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z");
+            }
+            icon.appendChild(path);
+            empty.appendChild(icon);
+            
+            const text = document.createElement("p");
+            if (searchQuery) {
+                text.textContent = `No assets found for "${searchQuery}"`;
+            } else if (selectedFolderId === "all") {
+                text.textContent = "No assets available.";
+            } else {
+                text.textContent = "No assets in this folder.";
+            }
+            text.style.margin = "0";
+            empty.appendChild(text);
+            
+            if (searchQuery) {
+                const hint = document.createElement("p");
+                hint.textContent = "Try a different search term";
+                hint.style.margin = "4px 0 0 0";
+                hint.style.fontSize = "12px";
+                hint.style.opacity = "0.7";
+                empty.appendChild(hint);
+            }
+            
             elements.grid.appendChild(empty);
             return;
         }
 
+        const selectedIds = callbacks.getSelectedIds ? callbacks.getSelectedIds() : [];
         const fragment = document.createDocumentFragment();
-        assets.forEach((asset) => {
-            fragment.appendChild(createAssetCard(asset, onImport));
+        assets.forEach((asset, index) => {
+            const isSelected = selectedIds.includes(asset.id);
+            const card = createAssetCard(asset, { ...callbacks, isSelected });
+            // Staggered animation delay (capped at 500ms max total)
+            const delay = Math.min(index * 30, 500);
+            card.style.animationDelay = `${delay}ms`;
+            fragment.appendChild(card);
         });
         elements.grid.appendChild(fragment);
         log(`Rendered ${assets.length} assets.`);
@@ -379,11 +517,6 @@
                 btn.addEventListener("click", onClick);
                 
                 mainContent.appendChild(btn);
-            } else {
-                // Clone and replace to remove old event listeners if they stack up
-                // Or better: just ensure we don't attach multiple listeners or handle it in main
-                // For now, simple display toggle is safer if listener is stable.
-                // But the callback might change if state changes? No, onClick usually refers to a stable function in main.
             }
             
             btn.style.display = "block";
@@ -392,6 +525,213 @@
                 btn.style.display = "none";
             }
         }
+    };
+
+    /**
+     * Updates the search statistics display
+     * @param {number} shown - Number of assets currently shown
+     * @param {number} total - Total number of assets matching search
+     * @param {string} query - The search query (empty if no search)
+     */
+    const updateSearchStats = (shown, total, query = "") => {
+        if (!elements.searchStats) return;
+        
+        if (!query) {
+            elements.searchStats.textContent = total > 0 ? `${total} assets available` : "";
+            elements.searchStats.classList.remove("search-stats--active");
+            return;
+        }
+        
+        elements.searchStats.classList.add("search-stats--active");
+        if (total === 0) {
+            elements.searchStats.textContent = `No results for "${query}"`;
+        } else {
+            elements.searchStats.textContent = `Showing ${shown} of ${total} results for "${query}"`;
+        }
+    };
+
+    /**
+     * Clears the search input
+     */
+    const clearSearch = () => {
+        if (elements.searchInput) {
+            elements.searchInput.value = "";
+        }
+        if (elements.clearSearchBtn) {
+            elements.clearSearchBtn.classList.add("hidden");
+        }
+        updateSearchStats(0, 0, "");
+    };
+
+    /**
+     * Gets the current search query
+     * @returns {string} The search query
+     */
+    const getSearchQuery = () => {
+        return elements.searchInput ? elements.searchInput.value.trim().toLowerCase() : "";
+    };
+
+    /**
+     * Updates the clear button visibility based on input value
+     */
+    const updateClearButtonVisibility = () => {
+        if (!elements.clearSearchBtn || !elements.searchInput) return;
+        const hasValue = elements.searchInput.value.trim().length > 0;
+        elements.clearSearchBtn.classList.toggle("hidden", !hasValue);
+    };
+
+    /**
+     * Shows the preview modal with an asset
+     * @param {Object} asset - The asset to preview
+     */
+    const showPreview = (asset) => {
+        if (!elements.previewModal) return;
+        
+        const displayName = Utils.getDisplayName(asset.name || asset.id);
+        elements.previewTitle.textContent = displayName || "Asset Preview";
+        elements.previewImage.src = asset.thumbnail || PLACEHOLDER_THUMB;
+        elements.previewImage.alt = displayName || "Asset preview";
+        elements.previewModal.classList.remove("modal--hidden");
+        
+        // Store asset reference for import button
+        elements.previewModal.dataset.assetId = asset.id;
+        
+        log(`Showing preview for: ${displayName}`);
+    };
+
+    /**
+     * Hides the preview modal
+     */
+    const hidePreview = () => {
+        if (!elements.previewModal) return;
+        elements.previewModal.classList.add("modal--hidden");
+        elements.previewImage.src = "";
+        delete elements.previewModal.dataset.assetId;
+    };
+
+    /**
+     * Updates the selection bar visibility and count
+     * @param {number} count - Number of selected items
+     */
+    const updateSelectionBar = (count) => {
+        if (!elements.selectionBar) return;
+        
+        if (count > 0) {
+            elements.selectionBar.classList.remove("selection-bar--hidden");
+            elements.selectionCount.textContent = count;
+        } else {
+            elements.selectionBar.classList.add("selection-bar--hidden");
+        }
+    };
+
+    /**
+     * Toggles selection state on a card element
+     * @param {string} assetId - The asset ID
+     * @param {boolean} isSelected - Whether the asset is selected
+     */
+    const toggleCardSelection = (assetId, isSelected) => {
+        const card = elements.grid.querySelector(`.asset-card[data-asset-id="${assetId}"]`);
+        if (card) {
+            card.classList.toggle("asset-card--selected", isSelected);
+        }
+    };
+
+    /**
+     * Sets the grid size
+     * @param {string} size - "small", "medium", or "large"
+     */
+    const setGridSize = (size) => {
+        // Remove existing size classes
+        elements.grid.classList.remove("asset-grid--small", "asset-grid--medium", "asset-grid--large");
+        // Add new size class
+        elements.grid.classList.add(`asset-grid--${size}`);
+        
+        // Update button states
+        [elements.gridSmall, elements.gridMedium, elements.gridLarge].forEach(btn => {
+            if (btn) {
+                btn.classList.toggle("grid-size-btn--active", btn.dataset.size === size);
+            }
+        });
+        
+        log(`Grid size set to: ${size}`);
+    };
+
+    /**
+     * Updates the preview navigation buttons state
+     * @param {boolean} hasPrev - Whether there's a previous asset
+     * @param {boolean} hasNext - Whether there's a next asset
+     */
+    const updatePreviewNav = (hasPrev, hasNext) => {
+        if (elements.previewPrevBtn) {
+            elements.previewPrevBtn.disabled = !hasPrev;
+        }
+        if (elements.previewNextBtn) {
+            elements.previewNextBtn.disabled = !hasNext;
+        }
+    };
+
+    /**
+     * Checks if the preview modal is open
+     * @returns {boolean} True if preview is open
+     */
+    const isPreviewOpen = () => {
+        return elements.previewModal && !elements.previewModal.classList.contains("modal--hidden");
+    };
+
+    /**
+     * Shows the feedback button (when authenticated)
+     */
+    const showFeedbackButton = () => {
+        if (elements.feedbackButton) {
+            elements.feedbackButton.classList.remove("hidden");
+        }
+    };
+
+    /**
+     * Shows the feedback modal
+     */
+    const showFeedbackModal = () => {
+        if (!elements.feedbackModal) return;
+        elements.feedbackModal.classList.remove("modal--hidden");
+        elements.feedbackMessage.value = "";
+        elements.feedbackDiscord.value = "";
+        elements.feedbackType.value = "bug";
+        elements.feedbackError.classList.add("form-error--hidden");
+        elements.feedbackSuccess.classList.add("form-success--hidden");
+        elements.feedbackMessage.focus();
+        log("Showing feedback modal");
+    };
+
+    /**
+     * Hides the feedback modal
+     */
+    const hideFeedbackModal = () => {
+        if (!elements.feedbackModal) return;
+        elements.feedbackModal.classList.add("modal--hidden");
+        elements.feedbackMessage.value = "";
+        elements.feedbackDiscord.value = "";
+        elements.feedbackError.classList.add("form-error--hidden");
+        elements.feedbackSuccess.classList.add("form-success--hidden");
+    };
+
+    /**
+     * Shows an error in the feedback form
+     * @param {string} message - Error message to display
+     */
+    const showFeedbackError = (message) => {
+        elements.feedbackError.textContent = message;
+        elements.feedbackError.classList.remove("form-error--hidden");
+        elements.feedbackSuccess.classList.add("form-success--hidden");
+    };
+
+    /**
+     * Shows a success message in the feedback form
+     * @param {string} message - Success message to display
+     */
+    const showFeedbackSuccess = (message) => {
+        elements.feedbackSuccess.textContent = message;
+        elements.feedbackSuccess.classList.remove("form-success--hidden");
+        elements.feedbackError.classList.add("form-error--hidden");
     };
     
     // Expose methods
@@ -409,7 +749,23 @@
         hideApiKeyModal,
         showApiKeyError,
         toggleApiKeyVisibility,
-        updateLoadMoreButton
+        updateLoadMoreButton,
+        updateSearchStats,
+        clearSearch,
+        getSearchQuery,
+        updateClearButtonVisibility,
+        showPreview,
+        hidePreview,
+        updateSelectionBar,
+        toggleCardSelection,
+        setGridSize,
+        updatePreviewNav,
+        isPreviewOpen,
+        showFeedbackButton,
+        showFeedbackModal,
+        hideFeedbackModal,
+        showFeedbackError,
+        showFeedbackSuccess
     };
 
 })(window);
