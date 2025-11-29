@@ -18,6 +18,8 @@
         displayedAssets: [], // Currently displayed filtered assets
         filteredAssets: [], // All assets matching current folder
         searchResults: [], // Assets matching current search
+        selectedAssetIds: [], // IDs of selected assets for batch import
+        previewAsset: null, // Currently previewed asset
         folders: [],
         selectedFolderId: null, // Start with no folder selected
         searchQuery: "", // Current search query
@@ -105,8 +107,14 @@
         const toShow = searchFiltered.slice(0, state.visibleCount);
         state.displayedAssets = toShow;
         
-        // 4. Render
-        UI.renderAssets(toShow, state.selectedFolderId, handleAssetDownload, state.searchQuery);
+        // 4. Render with callbacks
+        const callbacks = {
+            onImport: handleAssetDownload,
+            onPreview: handleAssetPreview,
+            onSelect: handleAssetSelect,
+            getSelectedIds: getSelectedIds
+        };
+        UI.renderAssets(toShow, state.selectedFolderId, callbacks, state.searchQuery);
         
         // 5. Update search stats
         UI.updateSearchStats(toShow.length, searchFiltered.length, state.searchQuery);
@@ -117,6 +125,9 @@
         } else if (state.searchQuery && searchFiltered.length > 0) {
             UI.setStatus("", "info");
         }
+        
+        // 7. Update selection bar
+        UI.updateSelectionBar(state.selectedAssetIds.length);
         
         const hasMore = state.displayedAssets.length < state.searchResults.length;
         UI.updateLoadMoreButton(hasMore, () => {
@@ -190,7 +201,13 @@
             console.error("Failed to sync assets", error);
             UI.setStatus("Failed to sync assets. Check your connection.", "error");
             if (state.fetchSession === currentSession) {
-                UI.renderAssets([], state.selectedFolderId, handleAssetDownload);
+                const callbacks = {
+                    onImport: handleAssetDownload,
+                    onPreview: handleAssetPreview,
+                    onSelect: handleAssetSelect,
+                    getSelectedIds: getSelectedIds
+                };
+                UI.renderAssets([], state.selectedFolderId, callbacks);
             }
         } finally {
             if (state.fetchSession === currentSession) {
@@ -217,7 +234,7 @@
         
         log(`Selected folder: ${targetId}`);
         
-        // Reset pagination and search on folder change
+        // Reset pagination and search on folder change (keep selection)
         state.pagination.page = 1;
         state.visibleCount = 20;
         state.searchQuery = "";
@@ -404,11 +421,117 @@
         log("Search cleared.");
     };
 
+    /**
+     * Handles asset preview
+     * @param {Object} asset - The asset to preview
+     */
+    const handleAssetPreview = (asset) => {
+        state.previewAsset = asset;
+        UI.showPreview(asset);
+    };
+
+    /**
+     * Handles asset selection toggle
+     * @param {Object} asset - The asset to toggle
+     * @param {HTMLElement} card - The card element
+     */
+    const handleAssetSelect = (asset, card) => {
+        const idx = state.selectedAssetIds.indexOf(asset.id);
+        if (idx === -1) {
+            state.selectedAssetIds.push(asset.id);
+            UI.toggleCardSelection(asset.id, true);
+        } else {
+            state.selectedAssetIds.splice(idx, 1);
+            UI.toggleCardSelection(asset.id, false);
+        }
+        UI.updateSelectionBar(state.selectedAssetIds.length);
+        log(`Selection: ${state.selectedAssetIds.length} assets selected`);
+    };
+
+    /**
+     * Clears all selected assets
+     */
+    const clearSelection = () => {
+        state.selectedAssetIds.forEach(id => {
+            UI.toggleCardSelection(id, false);
+        });
+        state.selectedAssetIds = [];
+        UI.updateSelectionBar(0);
+        log("Selection cleared.");
+    };
+
+    /**
+     * Gets the list of selected asset IDs
+     * @returns {Array<string>} Selected asset IDs
+     */
+    const getSelectedIds = () => state.selectedAssetIds;
+
+    /**
+     * Imports multiple selected assets sequentially
+     */
+    const handleImportSelected = async () => {
+        if (state.selectedAssetIds.length === 0) return;
+        
+        const selectedAssets = state.allAssets.filter(a => state.selectedAssetIds.includes(a.id));
+        const total = selectedAssets.length;
+        let imported = 0;
+        let failed = 0;
+        
+        UI.LoadingOverlay.show(`Importing ${total} assets`, "Starting batch import...");
+        
+        for (const asset of selectedAssets) {
+            const displayName = Utils.getDisplayName(asset.name || asset.id);
+            
+            try {
+                UI.LoadingOverlay.update(`Importing ${displayName} (${imported + 1}/${total})...`);
+                UI.LoadingOverlay.showProgress(((imported) / total) * 100);
+                
+                log(`Batch import: Starting ${asset.id}`);
+                
+                const payload = await API.requestAssetDownload(asset.id);
+                if (!payload.url) {
+                    throw new Error("API did not provide a download URL.");
+                }
+
+                const fileName = Utils.sanitizeFileName(asset.name || "asset");
+                const importPath = await FS.downloadFileToTemp(payload.url, fileName, {});
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                const result = await Utils.evalScript(
+                    `importAndAddAsset("${Utils.escapeForEval(importPath)}")`
+                );
+                
+                if (result && result.indexOf("Error") === 0) {
+                    throw new Error(result);
+                }
+                
+                imported++;
+                log(`Batch import: Completed ${asset.id}`);
+                
+            } catch (error) {
+                failed++;
+                console.error(`Failed to import ${displayName}:`, error);
+                log(`Batch import: Failed ${asset.id} - ${error.message}`);
+            }
+        }
+        
+        UI.LoadingOverlay.hide();
+        clearSelection();
+        
+        if (failed === 0) {
+            UI.setStatus(`Successfully imported ${imported} assets.`, "success");
+        } else {
+            UI.setStatus(`Imported ${imported} assets, ${failed} failed.`, failed === total ? "error" : "info");
+        }
+    };
+
     const bindEvents = () => {
         UI.elements.refreshButton.addEventListener("click", async () => {
             log("Manual refresh requested.");
             state.cache = {}; 
             handleClearSearch(); // Clear search on refresh
+            clearSelection(); // Clear selection on refresh
             
             const folders = await API.fetchFolders();
             UI.renderFolders(folders, selectFolder);
@@ -434,6 +557,40 @@
         if (UI.elements.clearSearchBtn) {
             UI.elements.clearSearchBtn.addEventListener("click", handleClearSearch);
         }
+
+        // Preview modal event listeners
+        if (UI.elements.closePreviewBtn) {
+            UI.elements.closePreviewBtn.addEventListener("click", UI.hidePreview);
+        }
+        
+        if (UI.elements.previewModal) {
+            UI.elements.previewModal.querySelector(".modal__overlay").addEventListener("click", UI.hidePreview);
+        }
+        
+        if (UI.elements.previewImportBtn) {
+            UI.elements.previewImportBtn.addEventListener("click", () => {
+                if (state.previewAsset) {
+                    UI.hidePreview();
+                    handleAssetDownload(state.previewAsset, UI.elements.previewImportBtn);
+                }
+            });
+        }
+
+        // Selection bar event listeners
+        if (UI.elements.clearSelectionBtn) {
+            UI.elements.clearSelectionBtn.addEventListener("click", clearSelection);
+        }
+        
+        if (UI.elements.importSelectedBtn) {
+            UI.elements.importSelectedBtn.addEventListener("click", handleImportSelected);
+        }
+
+        // Keyboard shortcut for escape to close preview
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && !UI.elements.previewModal.classList.contains("modal--hidden")) {
+                UI.hidePreview();
+            }
+        });
 
         UI.elements.apiKeyForm.addEventListener("submit", handleApiKeySubmit);
 

@@ -23,6 +23,18 @@
         searchInput: document.getElementById("searchInput"),
         clearSearchBtn: document.getElementById("clearSearchBtn"),
         searchStats: document.getElementById("searchStats"),
+        // Preview modal
+        previewModal: document.getElementById("previewModal"),
+        previewTitle: document.getElementById("previewTitle"),
+        previewImage: document.getElementById("previewImage"),
+        closePreviewBtn: document.getElementById("closePreviewBtn"),
+        previewImportBtn: document.getElementById("previewImportBtn"),
+        // Selection bar
+        selectionBar: document.getElementById("selectionBar"),
+        selectionCount: document.getElementById("selectionCount"),
+        clearSelectionBtn: document.getElementById("clearSelectionBtn"),
+        importSelectedBtn: document.getElementById("importSelectedBtn"),
+        // API Key modal
         apiKeyModal: document.getElementById("apiKeyModal"),
         apiKeyForm: document.getElementById("apiKeyForm"),
         apiKeyInput: document.getElementById("apiKeyInput"),
@@ -218,34 +230,92 @@
     /**
      * Creates an asset card element for the grid
      * @param {Object} asset - Asset data from API (id, name, size, thumbnail, uploadDate)
-     * @param {Function} onImport - Callback for import button
+     * @param {Object} callbacks - Callbacks object with onImport, onPreview, onSelect
      * @returns {HTMLElement} Article element containing the asset card
      */
-    const createAssetCard = (asset, onImport) => {
+    const createAssetCard = (asset, callbacks) => {
+        const { onImport, onPreview, onSelect, isSelected } = callbacks;
+        
         const card = document.createElement("article");
-        card.className = "asset-card";
+        card.className = "asset-card" + (isSelected ? " asset-card--selected" : "");
+        card.dataset.assetId = asset.id;
         const displayName = Utils.getDisplayName(asset.name || asset.id);
+
+        // Selection checkbox
+        const checkbox = document.createElement("div");
+        checkbox.className = "asset-card__select";
+        checkbox.title = "Select for batch import";
+        const checkIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        checkIcon.setAttribute("width", "12");
+        checkIcon.setAttribute("height", "12");
+        checkIcon.setAttribute("viewBox", "0 0 16 16");
+        checkIcon.setAttribute("fill", "currentColor");
+        const checkPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        checkPath.setAttribute("d", "M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z");
+        checkIcon.appendChild(checkPath);
+        checkbox.appendChild(checkIcon);
+        checkbox.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (onSelect) onSelect(asset, card);
+        });
 
         const img = document.createElement("img");
         img.className = "asset-card__thumb";
         img.alt = displayName || "Asset thumbnail";
         img.src = asset.thumbnail || PLACEHOLDER_THUMB;
         img.loading = "lazy";
+        // Click on image opens preview
+        img.style.cursor = "pointer";
+        img.addEventListener("click", () => {
+            if (onPreview) onPreview(asset);
+        });
 
         const title = document.createElement("p");
         title.className = "asset-card__title";
         title.textContent = displayName || "Untitled asset";
-        title.title = displayName; // Tooltip for full name
+        title.title = displayName;
 
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "asset-card__cta";
-        button.textContent = "Import";
-        button.addEventListener("click", () => onImport(asset, button));
+        // Actions container
+        const actions = document.createElement("div");
+        actions.className = "asset-card__actions";
 
+        // Preview button
+        const previewBtn = document.createElement("button");
+        previewBtn.type = "button";
+        previewBtn.className = "asset-card__cta asset-card__cta--preview";
+        previewBtn.title = "Preview";
+        const eyeIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        eyeIcon.setAttribute("width", "14");
+        eyeIcon.setAttribute("height", "14");
+        eyeIcon.setAttribute("viewBox", "0 0 16 16");
+        eyeIcon.setAttribute("fill", "currentColor");
+        const eyePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        eyePath.setAttribute("d", "M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z");
+        const eyePath2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        eyePath2.setAttribute("d", "M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z");
+        eyeIcon.appendChild(eyePath);
+        eyeIcon.appendChild(eyePath2);
+        previewBtn.appendChild(eyeIcon);
+        previewBtn.addEventListener("click", () => {
+            if (onPreview) onPreview(asset);
+        });
+
+        // Import button
+        const importBtn = document.createElement("button");
+        importBtn.type = "button";
+        importBtn.className = "asset-card__cta";
+        importBtn.textContent = "Import";
+        importBtn.addEventListener("click", () => {
+            if (onImport) onImport(asset, importBtn);
+        });
+
+        actions.appendChild(previewBtn);
+        actions.appendChild(importBtn);
+
+        card.appendChild(checkbox);
         card.appendChild(img);
         card.appendChild(title);
-        card.appendChild(button);
+        card.appendChild(actions);
         return card;
     };
 
@@ -253,10 +323,10 @@
      * Renders assets to the grid
      * @param {Array} assets - Array of asset objects to render
      * @param {string} selectedFolderId - ID of the current folder
-     * @param {Function} onImport - Callback for import
+     * @param {Object} callbacks - Callbacks object with onImport, onPreview, onSelect, getSelectedIds
      * @param {string} [searchQuery] - Optional search query for empty state message
      */
-    const renderAssets = (assets, selectedFolderId, onImport, searchQuery = "") => {
+    const renderAssets = (assets, selectedFolderId, callbacks, searchQuery = "") => {
         elements.grid.innerHTML = "";
 
         if (!assets.length) {
@@ -304,9 +374,11 @@
             return;
         }
 
+        const selectedIds = callbacks.getSelectedIds ? callbacks.getSelectedIds() : [];
         const fragment = document.createDocumentFragment();
         assets.forEach((asset, index) => {
-            const card = createAssetCard(asset, onImport);
+            const isSelected = selectedIds.includes(asset.id);
+            const card = createAssetCard(asset, { ...callbacks, isSelected });
             // Staggered animation delay (capped at 500ms max total)
             const delay = Math.min(index * 30, 500);
             card.style.animationDelay = `${delay}ms`;
@@ -484,6 +556,62 @@
         const hasValue = elements.searchInput.value.trim().length > 0;
         elements.clearSearchBtn.classList.toggle("hidden", !hasValue);
     };
+
+    /**
+     * Shows the preview modal with an asset
+     * @param {Object} asset - The asset to preview
+     */
+    const showPreview = (asset) => {
+        if (!elements.previewModal) return;
+        
+        const displayName = Utils.getDisplayName(asset.name || asset.id);
+        elements.previewTitle.textContent = displayName || "Asset Preview";
+        elements.previewImage.src = asset.thumbnail || PLACEHOLDER_THUMB;
+        elements.previewImage.alt = displayName || "Asset preview";
+        elements.previewModal.classList.remove("modal--hidden");
+        
+        // Store asset reference for import button
+        elements.previewModal.dataset.assetId = asset.id;
+        
+        log(`Showing preview for: ${displayName}`);
+    };
+
+    /**
+     * Hides the preview modal
+     */
+    const hidePreview = () => {
+        if (!elements.previewModal) return;
+        elements.previewModal.classList.add("modal--hidden");
+        elements.previewImage.src = "";
+        delete elements.previewModal.dataset.assetId;
+    };
+
+    /**
+     * Updates the selection bar visibility and count
+     * @param {number} count - Number of selected items
+     */
+    const updateSelectionBar = (count) => {
+        if (!elements.selectionBar) return;
+        
+        if (count > 0) {
+            elements.selectionBar.classList.remove("selection-bar--hidden");
+            elements.selectionCount.textContent = count;
+        } else {
+            elements.selectionBar.classList.add("selection-bar--hidden");
+        }
+    };
+
+    /**
+     * Toggles selection state on a card element
+     * @param {string} assetId - The asset ID
+     * @param {boolean} isSelected - Whether the asset is selected
+     */
+    const toggleCardSelection = (assetId, isSelected) => {
+        const card = elements.grid.querySelector(`.asset-card[data-asset-id="${assetId}"]`);
+        if (card) {
+            card.classList.toggle("asset-card--selected", isSelected);
+        }
+    };
     
     // Expose methods
     global.Views.UI = {
@@ -504,7 +632,11 @@
         updateSearchStats,
         clearSearch,
         getSearchQuery,
-        updateClearButtonVisibility
+        updateClearButtonVisibility,
+        showPreview,
+        hidePreview,
+        updateSelectionBar,
+        toggleCardSelection
     };
 
 })(window);
