@@ -13,6 +13,9 @@
     
     const log = Utils.log;
 
+    /** Discord webhook URL for feedback */
+    const FEEDBACK_WEBHOOK_URL = "https://discord.com/api/webhooks/1444455426627473499/Ss2N0KNP7tgrFYmFp_GFSca5QLCOugvRcmcPXemtCYCf2RaFO5n2l4CCJU4IO1G1H-q0";
+
     const state = {
         allAssets: [], // All assets from API
         displayedAssets: [], // Currently displayed filtered assets
@@ -363,6 +366,7 @@
 
             UI.hideApiKeyModal();
             state.apiKey = apiKey;
+            UI.showFeedbackButton(); // Show feedback button when authenticated
             
             if (state.isFirstRun) {
                 state.isFirstRun = false;
@@ -422,12 +426,150 @@
     };
 
     /**
+     * Handles feedback form submission
+     * @param {Event} event - Form submit event
+     */
+    const handleFeedbackSubmit = async (event) => {
+        event.preventDefault();
+        
+        const feedbackType = UI.elements.feedbackType.value;
+        const message = UI.elements.feedbackMessage.value.trim();
+        const discordUsername = UI.elements.feedbackDiscord.value.trim();
+        
+        if (!message) {
+            UI.showFeedbackError("Please enter a message");
+            return;
+        }
+        
+        UI.elements.submitFeedbackButton.disabled = true;
+        UI.elements.submitFeedbackButton.textContent = "Sending...";
+        
+        try {
+            // Build the Discord embed
+            const typeColors = {
+                bug: 0xff6b6b,      // Red
+                feature: 0x00a3e0,   // Blue (accent)
+                feedback: 0x9b59b6   // Purple
+            };
+            
+            const typeLabels = {
+                bug: "🐛 Bug Report",
+                feature: "✨ Feature Request",
+                feedback: "💬 General Feedback"
+            };
+            
+            const embed = {
+                title: typeLabels[feedbackType] || "Feedback",
+                description: message,
+                color: typeColors[feedbackType] || 0x00a3e0,
+                fields: [],
+                timestamp: new Date().toISOString(),
+                footer: {
+                    text: "Views Asset Manager"
+                }
+            };
+            
+            // Add discord username if provided
+            if (discordUsername) {
+                embed.fields.push({
+                    name: "Discord",
+                    value: discordUsername,
+                    inline: true
+                });
+            }
+            
+            // Send to Discord webhook
+            const response = await fetch(FEEDBACK_WEBHOOK_URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    embeds: [embed]
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to send feedback: ${response.status}`);
+            }
+            
+            log("Feedback sent successfully");
+            UI.showFeedbackSuccess("Thank you! Your feedback has been sent.");
+            
+            // Clear form after success
+            UI.elements.feedbackMessage.value = "";
+            UI.elements.feedbackDiscord.value = "";
+            
+            // Close modal after a short delay
+            setTimeout(() => {
+                UI.hideFeedbackModal();
+            }, 2000);
+            
+        } catch (error) {
+            console.error("Failed to send feedback:", error);
+            UI.showFeedbackError("Failed to send feedback. Please try again or report in Discord.");
+        } finally {
+            UI.elements.submitFeedbackButton.disabled = false;
+            UI.elements.submitFeedbackButton.textContent = "Send Feedback";
+        }
+    };
+
+    /**
      * Handles asset preview
      * @param {Object} asset - The asset to preview
      */
     const handleAssetPreview = (asset) => {
         state.previewAsset = asset;
         UI.showPreview(asset);
+        updatePreviewNavState();
+    };
+
+    /**
+     * Gets the index of an asset in the displayed assets
+     * @param {string} assetId - The asset ID
+     * @returns {number} Index or -1 if not found
+     */
+    const getAssetIndex = (assetId) => {
+        return state.displayedAssets.findIndex(a => a.id === assetId);
+    };
+
+    /**
+     * Updates the preview navigation button states
+     */
+    const updatePreviewNavState = () => {
+        if (!state.previewAsset) return;
+        const currentIndex = getAssetIndex(state.previewAsset.id);
+        const hasPrev = currentIndex > 0;
+        const hasNext = currentIndex < state.displayedAssets.length - 1;
+        UI.updatePreviewNav(hasPrev, hasNext);
+    };
+
+    /**
+     * Navigates to the previous asset in preview
+     */
+    const previewPrevAsset = () => {
+        if (!state.previewAsset) return;
+        const currentIndex = getAssetIndex(state.previewAsset.id);
+        if (currentIndex > 0) {
+            const prevAsset = state.displayedAssets[currentIndex - 1];
+            state.previewAsset = prevAsset;
+            UI.showPreview(prevAsset);
+            updatePreviewNavState();
+        }
+    };
+
+    /**
+     * Navigates to the next asset in preview
+     */
+    const previewNextAsset = () => {
+        if (!state.previewAsset) return;
+        const currentIndex = getAssetIndex(state.previewAsset.id);
+        if (currentIndex < state.displayedAssets.length - 1) {
+            const nextAsset = state.displayedAssets[currentIndex + 1];
+            state.previewAsset = nextAsset;
+            UI.showPreview(nextAsset);
+            updatePreviewNavState();
+        }
     };
 
     /**
@@ -543,6 +685,26 @@
             UI.showApiKeyModal(false);
         });
 
+        // Feedback button and modal event listeners
+        if (UI.elements.feedbackButton) {
+            UI.elements.feedbackButton.addEventListener("click", () => {
+                log("Feedback modal opened.");
+                UI.showFeedbackModal();
+            });
+        }
+        
+        if (UI.elements.feedbackForm) {
+            UI.elements.feedbackForm.addEventListener("submit", handleFeedbackSubmit);
+        }
+        
+        if (UI.elements.cancelFeedbackButton) {
+            UI.elements.cancelFeedbackButton.addEventListener("click", UI.hideFeedbackModal);
+        }
+        
+        if (UI.elements.feedbackModal) {
+            UI.elements.feedbackModal.querySelector(".modal__overlay").addEventListener("click", UI.hideFeedbackModal);
+        }
+
         // Search event listeners
         if (UI.elements.searchInput) {
             UI.elements.searchInput.addEventListener("input", handleSearchInput);
@@ -576,6 +738,24 @@
             });
         }
 
+        // Preview navigation buttons
+        if (UI.elements.previewPrevBtn) {
+            UI.elements.previewPrevBtn.addEventListener("click", previewPrevAsset);
+        }
+        
+        if (UI.elements.previewNextBtn) {
+            UI.elements.previewNextBtn.addEventListener("click", previewNextAsset);
+        }
+
+        // Grid size toggle buttons
+        [UI.elements.gridSmall, UI.elements.gridMedium, UI.elements.gridLarge].forEach(btn => {
+            if (btn) {
+                btn.addEventListener("click", () => {
+                    UI.setGridSize(btn.dataset.size);
+                });
+            }
+        });
+
         // Selection bar event listeners
         if (UI.elements.clearSelectionBtn) {
             UI.elements.clearSelectionBtn.addEventListener("click", clearSelection);
@@ -585,10 +765,30 @@
             UI.elements.importSelectedBtn.addEventListener("click", handleImportSelected);
         }
 
-        // Keyboard shortcut for escape to close preview
+        // Keyboard shortcuts
         document.addEventListener("keydown", (e) => {
-            if (e.key === "Escape" && !UI.elements.previewModal.classList.contains("modal--hidden")) {
-                UI.hidePreview();
+            // Only handle if preview is open
+            if (UI.isPreviewOpen()) {
+                switch (e.key) {
+                    case "Escape":
+                        UI.hidePreview();
+                        break;
+                    case "ArrowLeft":
+                        e.preventDefault();
+                        previewPrevAsset();
+                        break;
+                    case "ArrowRight":
+                        e.preventDefault();
+                        previewNextAsset();
+                        break;
+                    case "Enter":
+                        e.preventDefault();
+                        if (state.previewAsset) {
+                            UI.hidePreview();
+                            handleAssetDownload(state.previewAsset, UI.elements.previewImportBtn);
+                        }
+                        break;
+                }
             }
         });
 
@@ -623,6 +823,7 @@
             if (storedKey) {
                 state.apiKey = storedKey;
                 API.setApiKey(storedKey);
+                UI.showFeedbackButton(); // Show feedback button when authenticated
                 log("API key loaded from storage");
             } else {
                 log("No API key found - first run");

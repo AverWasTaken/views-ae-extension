@@ -29,11 +29,28 @@
         previewImage: document.getElementById("previewImage"),
         closePreviewBtn: document.getElementById("closePreviewBtn"),
         previewImportBtn: document.getElementById("previewImportBtn"),
+        previewPrevBtn: document.getElementById("previewPrevBtn"),
+        previewNextBtn: document.getElementById("previewNextBtn"),
+        // Grid size buttons
+        gridSmall: document.getElementById("gridSmall"),
+        gridMedium: document.getElementById("gridMedium"),
+        gridLarge: document.getElementById("gridLarge"),
         // Selection bar
         selectionBar: document.getElementById("selectionBar"),
         selectionCount: document.getElementById("selectionCount"),
         clearSelectionBtn: document.getElementById("clearSelectionBtn"),
         importSelectedBtn: document.getElementById("importSelectedBtn"),
+        // Feedback modal
+        feedbackButton: document.getElementById("feedbackButton"),
+        feedbackModal: document.getElementById("feedbackModal"),
+        feedbackForm: document.getElementById("feedbackForm"),
+        feedbackType: document.getElementById("feedbackType"),
+        feedbackMessage: document.getElementById("feedbackMessage"),
+        feedbackDiscord: document.getElementById("feedbackDiscord"),
+        feedbackError: document.getElementById("feedbackError"),
+        feedbackSuccess: document.getElementById("feedbackSuccess"),
+        cancelFeedbackButton: document.getElementById("cancelFeedbackButton"),
+        submitFeedbackButton: document.getElementById("submitFeedbackButton"),
         // API Key modal
         apiKeyModal: document.getElementById("apiKeyModal"),
         apiKeyForm: document.getElementById("apiKeyForm"),
@@ -264,10 +281,16 @@
         img.alt = displayName || "Asset thumbnail";
         img.src = asset.thumbnail || PLACEHOLDER_THUMB;
         img.loading = "lazy";
-        // Click on image opens preview
+        // Click on image opens preview, double-click imports
         img.style.cursor = "pointer";
         img.addEventListener("click", () => {
             if (onPreview) onPreview(asset);
+        });
+        img.addEventListener("dblclick", (e) => {
+            e.preventDefault();
+            // Find the import button and trigger import
+            const importBtn = card.querySelector(".asset-card__cta:not(.asset-card__cta--preview)");
+            if (onImport && importBtn) onImport(asset, importBtn);
         });
 
         const title = document.createElement("p");
@@ -612,6 +635,104 @@
             card.classList.toggle("asset-card--selected", isSelected);
         }
     };
+
+    /**
+     * Sets the grid size
+     * @param {string} size - "small", "medium", or "large"
+     */
+    const setGridSize = (size) => {
+        // Remove existing size classes
+        elements.grid.classList.remove("asset-grid--small", "asset-grid--medium", "asset-grid--large");
+        // Add new size class
+        elements.grid.classList.add(`asset-grid--${size}`);
+        
+        // Update button states
+        [elements.gridSmall, elements.gridMedium, elements.gridLarge].forEach(btn => {
+            if (btn) {
+                btn.classList.toggle("grid-size-btn--active", btn.dataset.size === size);
+            }
+        });
+        
+        log(`Grid size set to: ${size}`);
+    };
+
+    /**
+     * Updates the preview navigation buttons state
+     * @param {boolean} hasPrev - Whether there's a previous asset
+     * @param {boolean} hasNext - Whether there's a next asset
+     */
+    const updatePreviewNav = (hasPrev, hasNext) => {
+        if (elements.previewPrevBtn) {
+            elements.previewPrevBtn.disabled = !hasPrev;
+        }
+        if (elements.previewNextBtn) {
+            elements.previewNextBtn.disabled = !hasNext;
+        }
+    };
+
+    /**
+     * Checks if the preview modal is open
+     * @returns {boolean} True if preview is open
+     */
+    const isPreviewOpen = () => {
+        return elements.previewModal && !elements.previewModal.classList.contains("modal--hidden");
+    };
+
+    /**
+     * Shows the feedback button (when authenticated)
+     */
+    const showFeedbackButton = () => {
+        if (elements.feedbackButton) {
+            elements.feedbackButton.classList.remove("hidden");
+        }
+    };
+
+    /**
+     * Shows the feedback modal
+     */
+    const showFeedbackModal = () => {
+        if (!elements.feedbackModal) return;
+        elements.feedbackModal.classList.remove("modal--hidden");
+        elements.feedbackMessage.value = "";
+        elements.feedbackDiscord.value = "";
+        elements.feedbackType.value = "bug";
+        elements.feedbackError.classList.add("form-error--hidden");
+        elements.feedbackSuccess.classList.add("form-success--hidden");
+        elements.feedbackMessage.focus();
+        log("Showing feedback modal");
+    };
+
+    /**
+     * Hides the feedback modal
+     */
+    const hideFeedbackModal = () => {
+        if (!elements.feedbackModal) return;
+        elements.feedbackModal.classList.add("modal--hidden");
+        elements.feedbackMessage.value = "";
+        elements.feedbackDiscord.value = "";
+        elements.feedbackError.classList.add("form-error--hidden");
+        elements.feedbackSuccess.classList.add("form-success--hidden");
+    };
+
+    /**
+     * Shows an error in the feedback form
+     * @param {string} message - Error message to display
+     */
+    const showFeedbackError = (message) => {
+        elements.feedbackError.textContent = message;
+        elements.feedbackError.classList.remove("form-error--hidden");
+        elements.feedbackSuccess.classList.add("form-success--hidden");
+    };
+
+    /**
+     * Shows a success message in the feedback form
+     * @param {string} message - Success message to display
+     */
+    const showFeedbackSuccess = (message) => {
+        elements.feedbackSuccess.textContent = message;
+        elements.feedbackSuccess.classList.remove("form-success--hidden");
+        elements.feedbackError.classList.add("form-error--hidden");
+    };
     
     // Expose methods
     global.Views.UI = {
@@ -636,7 +757,15 @@
         showPreview,
         hidePreview,
         updateSelectionBar,
-        toggleCardSelection
+        toggleCardSelection,
+        setGridSize,
+        updatePreviewNav,
+        isPreviewOpen,
+        showFeedbackButton,
+        showFeedbackModal,
+        hideFeedbackModal,
+        showFeedbackError,
+        showFeedbackSuccess
     };
 
 })(window);
