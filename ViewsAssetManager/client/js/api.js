@@ -292,11 +292,28 @@
 
     /**
      * Compares version strings to check if update is needed
+     * Only returns true if server version is NEWER than expected
      * @param {string} serverVersion - Version from the server
-     * @returns {boolean} True if versions don't match (update needed)
+     * @returns {boolean} True if server version is newer (update needed)
      */
     const isUpdateRequired = (serverVersion) => {
-        return serverVersion !== EXPECTED_VERSION;
+        try {
+            const [serverMajor, serverMinor, serverPatch] = serverVersion.split(".").map(Number);
+            const [expectedMajor, expectedMinor, expectedPatch] = EXPECTED_VERSION.split(".").map(Number);
+            
+            // Server major version is higher
+            if (serverMajor > expectedMajor) return true;
+            // Same major, server minor is higher
+            if (serverMajor === expectedMajor && serverMinor > expectedMinor) return true;
+            // Same major and minor, server patch is higher
+            if (serverMajor === expectedMajor && serverMinor === expectedMinor && serverPatch > expectedPatch) return true;
+            
+            return false;
+        } catch (e) {
+            // If parsing fails, fall back to simple string comparison
+            log("Version parse error, falling back to string compare:", e);
+            return serverVersion !== EXPECTED_VERSION;
+        }
     };
 
     global.Views.API = {
