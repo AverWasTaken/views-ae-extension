@@ -23,8 +23,10 @@
         searchResults: [], // Assets matching current search
         selectedAssetIds: [], // IDs of selected assets for batch import
         previewAsset: null, // Currently previewed asset
-        folders: [],
+        folders: [], // All folders from API
+        folderMap: {}, // Map of folder ID to folder object for quick lookup
         selectedFolderId: null, // Start with no folder selected
+        currentFolderPath: [], // Breadcrumb path from root to current folder
         searchQuery: "", // Current search query
         apiKey: "",
         deviceId: null, 
@@ -50,7 +52,46 @@
     const VERSION_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
     /**
-     * Filters assets by current folder
+     * Loads folders from API and builds lookup map
+     * @returns {Promise<Array>} Array of folder objects
+     */
+    const loadFolders = async () => {
+        const folders = await API.fetchFolders();
+        state.folders = folders;
+        
+        // Build lookup map
+        state.folderMap = {};
+        folders.forEach(folder => {
+            state.folderMap[folder.id] = folder;
+        });
+        
+        log(`Loaded ${folders.length} folders into state.`);
+        return folders;
+    };
+
+    /**
+     * Gets all descendant folder IDs for a given folder
+     * @param {string} folderId - Parent folder ID
+     * @returns {Set<string>} Set of descendant folder IDs (including the parent)
+     */
+    const getDescendantFolderIds = (folderId) => {
+        const descendants = new Set([folderId]);
+        
+        const addChildren = (parentId) => {
+            state.folders.forEach(folder => {
+                if (folder.parentId === parentId && !descendants.has(folder.id)) {
+                    descendants.add(folder.id);
+                    addChildren(folder.id);
+                }
+            });
+        };
+        
+        addChildren(folderId);
+        return descendants;
+    };
+
+    /**
+     * Filters assets by current folder (includes subfolder assets)
      * @param {Array} allAssets - List of all assets
      * @returns {Array} - Filtered assets
      */
@@ -58,8 +99,12 @@
         if (String(state.selectedFolderId) === "all") {
             return allAssets;
         }
+        
+        // Get all descendant folder IDs to include subfolder assets
+        const validFolderIds = getDescendantFolderIds(state.selectedFolderId);
+        
         return allAssets.filter(asset => {
-            return String(asset.folderId) === String(state.selectedFolderId);
+            return validFolderIds.has(String(asset.folderId));
         });
     };
 
@@ -226,10 +271,28 @@
     };
 
     /**
+     * Builds folder path from local folder data
+     * @param {string} folderId - Target folder ID
+     * @returns {Array} Array of folder objects from root to target
+     */
+    const buildFolderPath = (folderId) => {
+        const path = [];
+        let currentId = folderId;
+        
+        while (currentId && state.folderMap[currentId]) {
+            const folder = state.folderMap[currentId];
+            path.unshift(folder);
+            currentId = folder.parentId;
+        }
+        
+        return path;
+    };
+
+    /**
      * Selects a folder and fetches assets for it
      * @param {string} folderId - Folder ID to select ("all" or folder UUID)
      */
-    const selectFolder = (folderId) => {
+    const selectFolder = async (folderId) => {
         const targetId = String(folderId);
         
         if (String(state.selectedFolderId) === targetId && !state.isWelcome) return;
@@ -248,6 +311,20 @@
         state.visibleCount = 20;
         state.searchQuery = "";
         UI.clearSearch();
+        
+        // Update breadcrumbs
+        if (targetId === "all") {
+            state.currentFolderPath = [];
+            UI.hideBreadcrumbs();
+        } else {
+            // Build path from local data (faster than API call)
+            state.currentFolderPath = buildFolderPath(targetId);
+            UI.renderBreadcrumbs(state.currentFolderPath, selectFolder);
+            
+            // Expand folder tree to show selected folder
+            const pathIds = state.currentFolderPath.slice(0, -1).map(f => f.id);
+            UI.expandToFolder(targetId, pathIds);
+        }
         
         updateAssetView();
     };
@@ -378,13 +455,13 @@
                 state.isFirstRun = false;
                 UI.setStatus("API key configured successfully!", "success");
                 await Utils.loadHostScript();
-                const folders = await API.fetchFolders();
+                const folders = await loadFolders();
                 UI.renderFolders(folders, selectFolder);
                 UI.renderWelcomeScreen();
             } else {
                 UI.setStatus("API key updated successfully!", "success");
                 state.cache = {}; 
-                const folders = await API.fetchFolders();
+                const folders = await loadFolders();
                 UI.renderFolders(folders, selectFolder);
                 if (!state.isWelcome) {
                     syncAssets();
@@ -687,7 +764,7 @@
                 return; // Stop if update is required
             }
             
-            const folders = await API.fetchFolders();
+            const folders = await loadFolders();
             UI.renderFolders(folders, selectFolder);
             await syncAssets();
         });
@@ -923,9 +1000,9 @@
 
             await Utils.loadHostScript();
             
-            const folders = await API.fetchFolders();
+            const folders = await loadFolders();
             UI.renderFolders(folders, selectFolder);
-            
+
             UI.renderWelcomeScreen();
             
             syncAssets();

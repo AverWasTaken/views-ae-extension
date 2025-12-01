@@ -325,8 +325,7 @@ body {
     background-color: var(--ae-bg-card);
     color: var(--ae-text-primary);
     font-weight: 500;
-    border-left: 3px solid var(--ae-accent);
-    padding-left: 13px; /* compensate for border */
+    box-shadow: inset 3px 0 0 var(--ae-accent);
 }
 
 .folder-item svg {
@@ -348,6 +347,110 @@ body {
     border-radius: 10px;
     min-width: 20px;
     text-align: center;
+}
+
+/* Folder hierarchy styles */
+.folder-item--hidden {
+    display: none;
+}
+
+.folder-item__toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    margin-right: 2px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--ae-text-secondary);
+    border-radius: 3px;
+    flex-shrink: 0;
+    transition: color var(--transition), background-color var(--transition);
+}
+
+.folder-item__toggle:hover {
+    color: var(--ae-text-primary);
+    background-color: var(--ae-bg-hover);
+}
+
+.folder-item__toggle-icon {
+    transition: transform 0.15s ease;
+}
+
+.folder-item--expanded > .folder-item__toggle .folder-item__toggle-icon {
+    transform: rotate(90deg);
+}
+
+.folder-item__toggle-spacer {
+    width: 18px;
+    flex-shrink: 0;
+}
+
+/* Breadcrumb Navigation */
+.breadcrumb-nav {
+    padding: 0 0 12px 0;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--ae-border);
+    flex-shrink: 0;
+}
+
+.breadcrumb-nav--hidden {
+    display: none;
+}
+
+.breadcrumb-list {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex-wrap: wrap;
+}
+
+.breadcrumb-item {
+    display: flex;
+    align-items: center;
+}
+
+.breadcrumb-separator {
+    display: flex;
+    align-items: center;
+    color: var(--ae-text-secondary);
+    opacity: 0.5;
+}
+
+.breadcrumb-link {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    color: var(--ae-text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: color var(--transition), background-color var(--transition);
+}
+
+.breadcrumb-link:hover {
+    color: var(--ae-text-primary);
+    background-color: var(--ae-bg-card);
+}
+
+.breadcrumb-link svg {
+    flex-shrink: 0;
+}
+
+.breadcrumb-current {
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ae-text-primary);
 }
 
 /* Main Content Area */

@@ -23,6 +23,9 @@
         searchInput: document.getElementById("searchInput"),
         clearSearchBtn: document.getElementById("clearSearchBtn"),
         searchStats: document.getElementById("searchStats"),
+        // Breadcrumb navigation
+        breadcrumbNav: document.getElementById("breadcrumbNav"),
+        breadcrumbList: document.getElementById("breadcrumbList"),
         // Preview modal
         previewModal: document.getElementById("previewModal"),
         previewTitle: document.getElementById("previewTitle"),
@@ -190,7 +193,105 @@
     };
 
     /**
-     * Renders the folder list in the sidebar
+     * Builds a tree structure from flat folder list
+     * @param {Array} folders - Flat array of folder objects with parentId
+     * @returns {Object} Object with rootFolders array and childrenMap
+     */
+    const buildFolderTree = (folders) => {
+        const childrenMap = {};
+        const rootFolders = [];
+        
+        // Initialize children arrays
+        folders.forEach(folder => {
+            childrenMap[folder.id] = [];
+        });
+        
+        // Populate children and identify roots
+        folders.forEach(folder => {
+            if (folder.parentId && childrenMap[folder.parentId]) {
+                childrenMap[folder.parentId].push(folder);
+            } else {
+                rootFolders.push(folder);
+            }
+        });
+        
+        return { rootFolders, childrenMap };
+    };
+
+    /**
+     * Creates a folder item element
+     * @param {Object} folder - Folder object
+     * @param {number} depth - Nesting depth
+     * @param {boolean} hasChildren - Whether folder has children
+     * @param {Function} onFolderSelect - Callback when folder is clicked
+     * @param {Function} onToggleExpand - Callback when expand toggle is clicked
+     * @returns {HTMLElement} The folder list item
+     */
+    const createFolderItem = (folder, depth, hasChildren, onFolderSelect, onToggleExpand) => {
+        const li = document.createElement("li");
+        li.className = "folder-item";
+        li.dataset.folderId = folder.id;
+        if (folder.parentId) {
+            li.dataset.parentId = folder.parentId;
+        }
+        li.style.paddingLeft = `${8 + (depth * 16)}px`;
+        
+        // Expand/collapse toggle (only if has children)
+        if (hasChildren) {
+            const toggle = document.createElement("button");
+            toggle.type = "button";
+            toggle.className = "folder-item__toggle";
+            toggle.title = "Expand/Collapse";
+            toggle.innerHTML = `
+                <svg class="folder-item__toggle-icon" width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+                    <path d="M3 2l4 3-4 3V2z"/>
+                </svg>
+            `;
+            toggle.addEventListener("click", (e) => {
+                e.stopPropagation();
+                onToggleExpand(folder.id, li);
+            });
+            li.appendChild(toggle);
+        } else {
+            // Spacer for alignment when no toggle
+            const spacer = document.createElement("span");
+            spacer.className = "folder-item__toggle-spacer";
+            li.appendChild(spacer);
+        }
+        
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("width", "14");
+        svg.setAttribute("height", "14");
+        svg.setAttribute("viewBox", "0 0 14 14");
+        svg.setAttribute("fill", "currentColor");
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", "M1 3h5l1 1h5v7H1z");
+        svg.appendChild(path);
+
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "folder-item__name";
+        nameSpan.textContent = folder.name;
+        nameSpan.title = folder.name;
+
+        const countSpan = document.createElement("span");
+        countSpan.className = "folder-item__count";
+        countSpan.textContent = "-";
+
+        li.appendChild(svg);
+        li.appendChild(nameSpan);
+        li.appendChild(countSpan);
+        
+        li.addEventListener("click", (e) => {
+            if (!e.target.closest(".folder-item__toggle")) {
+                onFolderSelect(folder.id);
+            }
+        });
+        
+        return li;
+    };
+
+    /**
+     * Renders the folder list in the sidebar with hierarchy support
      * @param {Array} folders - Array of folder objects
      * @param {Function} onFolderSelect - Callback when a folder is clicked
      */
@@ -203,40 +304,191 @@
         const allItem = elements.folderList.querySelector('[data-folder-id="all"] .folder-item__count');
         if (allItem) allItem.textContent = "-";
 
-        // Add folder items
-        folders.forEach((folder) => {
+        // Build tree structure
+        const { rootFolders, childrenMap } = buildFolderTree(folders);
+        
+        // Track expanded state
+        const expandedFolders = new Set();
+        
+        /**
+         * Toggles folder expansion
+         * @param {string} folderId - Folder ID to toggle
+         * @param {HTMLElement} folderElement - The folder list item
+         */
+        const toggleExpand = (folderId, folderElement) => {
+            const isExpanded = expandedFolders.has(folderId);
+            
+            if (isExpanded) {
+                expandedFolders.delete(folderId);
+                folderElement.classList.remove("folder-item--expanded");
+                // Hide all descendants
+                const descendants = elements.folderList.querySelectorAll(`[data-parent-id="${folderId}"]`);
+                descendants.forEach(desc => {
+                    desc.classList.add("folder-item--hidden");
+                    // Also collapse and hide their children recursively
+                    const descId = desc.dataset.folderId;
+                    expandedFolders.delete(descId);
+                    desc.classList.remove("folder-item--expanded");
+                    hideDescendants(descId);
+                });
+            } else {
+                expandedFolders.add(folderId);
+                folderElement.classList.add("folder-item--expanded");
+                // Show direct children only
+                const children = elements.folderList.querySelectorAll(`[data-parent-id="${folderId}"]`);
+                children.forEach(child => {
+                    child.classList.remove("folder-item--hidden");
+                });
+            }
+        };
+        
+        /**
+         * Recursively hides all descendants of a folder
+         * @param {string} folderId - Parent folder ID
+         */
+        const hideDescendants = (folderId) => {
+            const children = elements.folderList.querySelectorAll(`[data-parent-id="${folderId}"]`);
+            children.forEach(child => {
+                child.classList.add("folder-item--hidden");
+                hideDescendants(child.dataset.folderId);
+            });
+        };
+        
+        /**
+         * Recursively renders folders
+         * @param {Array} folderList - Folders to render
+         * @param {number} depth - Current depth level
+         */
+        const renderFolderLevel = (folderList, depth) => {
+            folderList.forEach(folder => {
+                const children = childrenMap[folder.id] || [];
+                const hasChildren = children.length > 0;
+                
+                const li = createFolderItem(folder, depth, hasChildren, onFolderSelect, toggleExpand);
+                
+                // Hide if not at root level (will be shown when parent expands)
+                if (depth > 0) {
+                    li.classList.add("folder-item--hidden");
+                }
+                
+                elements.folderList.appendChild(li);
+                
+                // Recursively render children
+                if (hasChildren) {
+                    renderFolderLevel(children, depth + 1);
+                }
+            });
+        };
+        
+        // Render the tree starting from root folders
+        renderFolderLevel(rootFolders, 0);
+
+        log(`Rendered ${folders.length} folders (hierarchical).`);
+    };
+
+    /**
+     * Renders breadcrumb navigation
+     * @param {Array} path - Array of folder objects from root to current
+     * @param {Function} onNavigate - Callback when breadcrumb is clicked
+     */
+    const renderBreadcrumbs = (path, onNavigate) => {
+        if (!elements.breadcrumbNav || !elements.breadcrumbList) return;
+        
+        elements.breadcrumbList.innerHTML = "";
+        
+        // Always show root/home
+        const homeLi = document.createElement("li");
+        homeLi.className = "breadcrumb-item";
+        const homeBtn = document.createElement("button");
+        homeBtn.type = "button";
+        homeBtn.className = "breadcrumb-link";
+        homeBtn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+            </svg>
+        `;
+        homeBtn.title = "All Assets";
+        homeBtn.addEventListener("click", () => onNavigate("all"));
+        homeLi.appendChild(homeBtn);
+        elements.breadcrumbList.appendChild(homeLi);
+        
+        // Add separator and path items
+        path.forEach((folder, index) => {
+            // Separator
+            const sepLi = document.createElement("li");
+            sepLi.className = "breadcrumb-separator";
+            sepLi.setAttribute("aria-hidden", "true");
+            sepLi.innerHTML = `
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                </svg>
+            `;
+            elements.breadcrumbList.appendChild(sepLi);
+            
+            // Folder item
             const li = document.createElement("li");
-            li.className = "folder-item";
-            li.dataset.folderId = folder.id;
+            li.className = "breadcrumb-item";
             
-            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-            svg.setAttribute("width", "14");
-            svg.setAttribute("height", "14");
-            svg.setAttribute("viewBox", "0 0 14 14");
-            svg.setAttribute("fill", "currentColor");
-            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            path.setAttribute("d", "M1 3h5l1 1h5v7H1z");
-            svg.appendChild(path);
-
-            const nameSpan = document.createElement("span");
-            nameSpan.className = "folder-item__name";
-            nameSpan.textContent = folder.name;
-            nameSpan.title = folder.name;
-
-            const countSpan = document.createElement("span");
-            countSpan.className = "folder-item__count";
-            countSpan.textContent = "-"; // Initial state
-
-            li.appendChild(svg);
-            li.appendChild(nameSpan);
-            li.appendChild(countSpan);
+            const isLast = index === path.length - 1;
+            if (isLast) {
+                // Current folder - not clickable
+                const span = document.createElement("span");
+                span.className = "breadcrumb-current";
+                span.textContent = folder.name;
+                li.appendChild(span);
+            } else {
+                // Clickable parent
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "breadcrumb-link";
+                btn.textContent = folder.name;
+                btn.addEventListener("click", () => onNavigate(folder.id));
+                li.appendChild(btn);
+            }
             
-            li.addEventListener("click", () => onFolderSelect(folder.id));
-            
-            elements.folderList.appendChild(li);
+            elements.breadcrumbList.appendChild(li);
         });
+        
+        // Show/hide breadcrumb nav based on path
+        if (path.length > 0) {
+            elements.breadcrumbNav.classList.remove("breadcrumb-nav--hidden");
+        } else {
+            elements.breadcrumbNav.classList.add("breadcrumb-nav--hidden");
+        }
+    };
 
-        log(`Rendered ${folders.length} folders.`);
+    /**
+     * Hides the breadcrumb navigation
+     */
+    const hideBreadcrumbs = () => {
+        if (elements.breadcrumbNav) {
+            elements.breadcrumbNav.classList.add("breadcrumb-nav--hidden");
+        }
+    };
+
+    /**
+     * Expands folder tree to show a specific folder
+     * @param {string} folderId - The folder ID to reveal
+     * @param {Array} pathIds - Array of ancestor folder IDs
+     */
+    const expandToFolder = (folderId, pathIds) => {
+        // Expand all ancestors
+        pathIds.forEach(ancestorId => {
+            const folderEl = elements.folderList.querySelector(`[data-folder-id="${ancestorId}"]`);
+            if (folderEl) {
+                folderEl.classList.add("folder-item--expanded");
+                folderEl.classList.remove("folder-item--hidden");
+                // Show children
+                const children = elements.folderList.querySelectorAll(`[data-parent-id="${ancestorId}"]`);
+                children.forEach(child => child.classList.remove("folder-item--hidden"));
+            }
+        });
+        
+        // Make sure the target folder is visible
+        const targetEl = elements.folderList.querySelector(`[data-folder-id="${folderId}"]`);
+        if (targetEl) {
+            targetEl.classList.remove("folder-item--hidden");
+        }
     };
 
     /**
@@ -885,6 +1137,9 @@
         setLoading,
         renderWelcomeScreen,
         renderFolders,
+        renderBreadcrumbs,
+        hideBreadcrumbs,
+        expandToFolder,
         updateFolderCount,
         renderAssets,
         renderSkeletons,

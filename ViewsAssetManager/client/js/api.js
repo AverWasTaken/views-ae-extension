@@ -275,7 +275,8 @@
     };
 
     /**
-     * Fetches folders from the API
+     * Fetches all folders from the API (flat list with parentId)
+     * @returns {Promise<Array>} Array of folder objects
      */
     const fetchFolders = async () => {
         try {
@@ -286,6 +287,49 @@
             return folders;
         } catch (error) {
             console.error("Failed to load folders", error);
+            return [];
+        }
+    };
+
+    /**
+     * Gets child folders of a parent folder
+     * @param {string|null} [parentId=null] - Parent folder ID, or null/"root" for root-level folders
+     * @returns {Promise<Array>} Array of child folder objects
+     */
+    const getChildFolders = async (parentId = null) => {
+        try {
+            const endpoint = parentId && parentId !== "root" 
+                ? `/folders/children/${encodeURIComponent(parentId)}`
+                : "/folders/children";
+            log(`Fetching child folders for: ${parentId || "root"}`);
+            const data = await fetchJson(endpoint);
+            const folders = Array.isArray(data) ? data : data.folders || [];
+            log(`Found ${folders.length} child folders.`);
+            return folders;
+        } catch (error) {
+            console.error("Failed to load child folders", error);
+            return [];
+        }
+    };
+
+    /**
+     * Gets the breadcrumb path from root to a folder
+     * @param {string} folderId - Folder ID
+     * @returns {Promise<Array>} Array of folder objects from root to the target folder
+     */
+    const getFolderPath = async (folderId) => {
+        if (!folderId) {
+            return [];
+        }
+        
+        try {
+            log(`Fetching path for folder: ${folderId}`);
+            const data = await fetchJson(`/folders/${encodeURIComponent(folderId)}/path`);
+            const path = Array.isArray(data) ? data : data.path || [];
+            log(`Folder path has ${path.length} segments.`);
+            return path;
+        } catch (error) {
+            console.error("Failed to load folder path", error);
             return [];
         }
     };
@@ -365,6 +409,8 @@
         validateApiKey,
         fetchJson,
         fetchFolders,
+        getChildFolders,
+        getFolderPath,
         requestAssetDownload,
         fetchVersion,
         getExpectedVersion,
