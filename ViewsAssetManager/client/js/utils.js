@@ -215,11 +215,12 @@ fi
             } else {
                 // Windows: Use PowerShell with UAC elevation
                 const scriptPath = path.join(os.tmpdir(), "ViewsUpdate_Install.ps1");
+                // Note: No need to escape backslashes - script is written to file, not passed inline
                 const scriptContent = `
 $ErrorActionPreference = 'Stop'
-$src = '${clonedExtPath.replace(/\\/g, "\\\\")}'
-$dest = '${extensionDest.replace(/\\/g, "\\\\")}'
-$logFile = '${resultPath.replace(/\\/g, "\\\\")}'
+$src = '${clonedExtPath.replace(/'/g, "''")}'
+$dest = '${extensionDest.replace(/'/g, "''")}'
+$logFile = '${resultPath.replace(/'/g, "''")}'
 
 try {
     # Remove old extension if exists
