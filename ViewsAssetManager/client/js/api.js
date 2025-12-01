@@ -14,8 +14,40 @@
     const API_BASE_URL = "https://api.viewseditors.com";
     const API_KEY_STORAGE_KEY = "views_asset_manager_api_key";
     
-    /** Expected API version - update this when a new version is required */
-    const EXPECTED_VERSION = "1.0.0";
+    /** Cached extension version read from manifest */
+    let cachedExtensionVersion = null;
+    
+    /**
+     * Gets the extension version from the manifest.xml
+     * @returns {string} Version string from manifest
+     */
+    const getExtensionVersion = () => {
+        if (cachedExtensionVersion) return cachedExtensionVersion;
+        
+        try {
+            const csInterface = new CSInterface();
+            const extensionPath = csInterface.getSystemPath(SystemPath.EXTENSION);
+            const fs = require("fs");
+            const path = require("path");
+            const manifestPath = path.join(extensionPath, "CSXS", "manifest.xml");
+            
+            if (fs.existsSync(manifestPath)) {
+                const manifestContent = fs.readFileSync(manifestPath, "utf8");
+                const match = manifestContent.match(/ExtensionBundleVersion="([^"]+)"/);
+                if (match && match[1]) {
+                    cachedExtensionVersion = match[1];
+                    log("Read extension version from manifest:", cachedExtensionVersion);
+                    return cachedExtensionVersion;
+                }
+            }
+        } catch (e) {
+            log("Failed to read version from manifest:", e.message);
+        }
+        
+        // Fallback
+        cachedExtensionVersion = "1.0.0";
+        return cachedExtensionVersion;
+    };
     
     let currentApiKey = "";
     let cachedDeviceId = null;
@@ -285,34 +317,35 @@
     };
 
     /**
-     * Gets the expected API version
-     * @returns {string} Expected version string
+     * Gets the current extension version (read from manifest)
+     * @returns {string} Current version string
      */
-    const getExpectedVersion = () => EXPECTED_VERSION;
+    const getExpectedVersion = () => getExtensionVersion();
 
     /**
      * Compares version strings to check if update is needed
-     * Only returns true if server version is NEWER than expected
+     * Only returns true if server version is NEWER than local version
      * @param {string} serverVersion - Version from the server
      * @returns {boolean} True if server version is newer (update needed)
      */
     const isUpdateRequired = (serverVersion) => {
+        const localVersion = getExtensionVersion();
         try {
             const [serverMajor, serverMinor, serverPatch] = serverVersion.split(".").map(Number);
-            const [expectedMajor, expectedMinor, expectedPatch] = EXPECTED_VERSION.split(".").map(Number);
+            const [localMajor, localMinor, localPatch] = localVersion.split(".").map(Number);
             
             // Server major version is higher
-            if (serverMajor > expectedMajor) return true;
+            if (serverMajor > localMajor) return true;
             // Same major, server minor is higher
-            if (serverMajor === expectedMajor && serverMinor > expectedMinor) return true;
+            if (serverMajor === localMajor && serverMinor > localMinor) return true;
             // Same major and minor, server patch is higher
-            if (serverMajor === expectedMajor && serverMinor === expectedMinor && serverPatch > expectedPatch) return true;
+            if (serverMajor === localMajor && serverMinor === localMinor && serverPatch > localPatch) return true;
             
             return false;
         } catch (e) {
             // If parsing fails, fall back to simple string comparison
             log("Version parse error, falling back to string compare:", e);
-            return serverVersion !== EXPECTED_VERSION;
+            return serverVersion !== localVersion;
         }
     };
 

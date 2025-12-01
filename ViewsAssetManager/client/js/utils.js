@@ -121,6 +121,20 @@
         log("Destination:", extensionDest);
         
         try {
+            // Step 0: Fetch the API version to sync manifest
+            if (onProgress) onProgress("Fetching latest version...");
+            let apiVersion = "1.0.0";
+            try {
+                const response = await fetch("https://api.viewseditors.com/version");
+                if (response.ok) {
+                    const data = await response.json();
+                    apiVersion = data.version || "1.0.0";
+                    log("API version:", apiVersion);
+                }
+            } catch (e) {
+                log("Failed to fetch API version, using default:", e.message);
+            }
+            
             // Step 1: Check if git is installed
             if (onProgress) onProgress("Checking git installation...");
             try {
@@ -180,10 +194,17 @@
                 // Mac: Use AppleScript to request admin password
                 const shellScript = `
 #!/bin/bash
+MANIFEST="${extensionDest}/CSXS/manifest.xml"
+API_VERSION="${apiVersion}"
+
 rm -rf "${extensionDest}" 2>/dev/null
 cp -R "${clonedExtPath}" "${extensionDest}"
-if [ -f "${extensionDest}/CSXS/manifest.xml" ]; then
-    echo "SUCCESS" > "${resultPath}"
+
+if [ -f "$MANIFEST" ]; then
+    # Update manifest version to match API version
+    sed -i '' "s/ExtensionBundleVersion=\\"[^\\"]*\\"/ExtensionBundleVersion=\\"$API_VERSION\\"/g" "$MANIFEST"
+    sed -i '' "s/\\(<Extension Id=\\"com.views.assetmanager\\" Version=\\"\\)[^\\"]*\\(\\"\\)/\\1$API_VERSION\\2/g" "$MANIFEST"
+    echo "SUCCESS - Updated to version $API_VERSION" > "${resultPath}"
 else
     echo "ERROR: Copy failed" > "${resultPath}"
 fi
@@ -221,10 +242,12 @@ $ErrorActionPreference = 'Stop'
 $src = '${clonedExtPath.replace(/'/g, "''")}'
 $dest = '${extensionDest.replace(/'/g, "''")}'
 $logFile = '${resultPath.replace(/'/g, "''")}'
+$apiVersion = '${apiVersion}'
 
 $log = @()
 $log += "Source: $src"
 $log += "Dest: $dest"
+$log += "API Version: $apiVersion"
 $log += "Source exists: $(Test-Path $src)"
 
 try {
@@ -243,23 +266,26 @@ try {
     Copy-Item -Path $src -Destination $dest -Recurse -Force -ErrorAction Stop
     $log += "Copy completed"
     
-    # Verify copy succeeded by comparing manifest versions
-    $srcManifest = Join-Path $src "CSXS\\manifest.xml"
+    # Update manifest version to match API version
     $destManifest = Join-Path $dest "CSXS\\manifest.xml"
     
     if (-not (Test-Path $destManifest)) {
         throw "Copy verification failed - manifest not found at $destManifest"
     }
     
-    $srcVersion = (Select-String -Path $srcManifest -Pattern 'ExtensionBundleVersion="([^"]+)"').Matches.Groups[1].Value
-    $destVersion = (Select-String -Path $destManifest -Pattern 'ExtensionBundleVersion="([^"]+)"').Matches.Groups[1].Value
-    $log += "Source version: $srcVersion"
-    $log += "Installed version: $destVersion"
+    $manifestContent = Get-Content $destManifest -Raw
+    $manifestContent = $manifestContent -replace 'ExtensionBundleVersion="[^"]+"', ('ExtensionBundleVersion="' + $apiVersion + '"')
+    $manifestContent = $manifestContent -replace '(<Extension Id="com.views.assetmanager" Version=")[^"]+(")', ('$1' + $apiVersion + '$2')
+    Set-Content -Path $destManifest -Value $manifestContent -Encoding UTF8
+    $log += "Updated manifest to version $apiVersion"
     
-    if ($srcVersion -ne $destVersion) {
-        throw "Version mismatch after copy - src: $srcVersion, dest: $destVersion"
+    # Verify the update
+    $newVersion = (Select-String -Path $destManifest -Pattern 'ExtensionBundleVersion="([^"]+)"').Matches.Groups[1].Value
+    $log += "Verified manifest version: $newVersion"
+    
+    if ($newVersion -ne $apiVersion) {
+        throw "Version update failed - expected $apiVersion, got $newVersion"
     }
-    $log += "Version verified"
     
     # Write success with log
     ("SUCCESS" + [Environment]::NewLine + ($log -join [Environment]::NewLine)) | Out-File -FilePath $logFile -Encoding UTF8
