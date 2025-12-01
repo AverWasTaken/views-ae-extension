@@ -22,8 +22,7 @@
      * @returns {string} Version string
      */
     const getExtensionVersion = () => {
-        if (cachedExtensionVersion) return cachedExtensionVersion;
-        
+        // Don't cache - always read fresh to pick up updates after relaunch
         try {
             const csInterface = new CSInterface();
             const extensionPath = csInterface.getSystemPath(SystemPath.EXTENSION);
@@ -31,22 +30,31 @@
             const path = require("path");
             const versionPath = path.join(extensionPath, "version.json");
             
+            log("Extension path:", extensionPath);
+            log("Looking for version.json at:", versionPath);
+            
             if (fs.existsSync(versionPath)) {
-                const versionContent = fs.readFileSync(versionPath, "utf8");
+                let versionContent = fs.readFileSync(versionPath, "utf8");
+                // Remove BOM if present (PowerShell UTF8 adds it)
+                if (versionContent.charCodeAt(0) === 0xFEFF) {
+                    versionContent = versionContent.slice(1);
+                }
+                log("version.json contents:", versionContent);
                 const versionData = JSON.parse(versionContent);
                 if (versionData && versionData.version) {
-                    cachedExtensionVersion = versionData.version;
-                    log("Read extension version from version.json:", cachedExtensionVersion);
-                    return cachedExtensionVersion;
+                    log("Read extension version from version.json:", versionData.version);
+                    return versionData.version;
                 }
+            } else {
+                log("version.json not found at path!");
             }
         } catch (e) {
             log("Failed to read version from version.json:", e.message);
         }
         
         // Fallback
-        cachedExtensionVersion = "1.0.0";
-        return cachedExtensionVersion;
+        log("Using fallback version 1.0.0");
+        return "1.0.0";
     };
     
     let currentApiKey = "";

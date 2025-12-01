@@ -268,7 +268,8 @@ try {
     # Update version.json to match API version
     $versionFile = Join-Path $dest "version.json"
     $versionJson = '{"version": "' + $apiVersion + '"}'
-    Set-Content -Path $versionFile -Value $versionJson -Encoding UTF8
+    # Use WriteAllText to avoid BOM that breaks JSON parsing
+    [System.IO.File]::WriteAllText($versionFile, $versionJson)
     $log += "Updated version.json to $apiVersion"
     
     # Verify the update
