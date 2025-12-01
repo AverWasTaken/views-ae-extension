@@ -280,7 +280,7 @@
 
             const importPath = await FS.downloadFileToTemp(payload.url, fileName, {}, onProgress);
 
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 100));
 
             UI.LoadingOverlay.show(`Importing ${displayName}`, "Adding to project...");
             UI.LoadingOverlay.hideProgress();
@@ -644,7 +644,7 @@
                 const fileName = Utils.sanitizeFileName(asset.name || "asset");
                 const importPath = await FS.downloadFileToTemp(payload.url, fileName, {});
 
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(resolve => setTimeout(resolve, 100));
 
                 const result = await Utils.evalScript(
                     `importAndAddAsset("${Utils.escapeForEval(importPath)}")`
