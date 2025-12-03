@@ -125,7 +125,7 @@
             if (onProgress) onProgress("Fetching latest version...");
             let apiVersion = "1.0.0";
             try {
-                const response = await fetch("https://api.viewseditors.com/version");
+                const response = await fetch("http://localhost:3000/version");
                 if (response.ok) {
                     const data = await response.json();
                     apiVersion = data.version || "1.0.0";

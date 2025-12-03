@@ -11,7 +11,7 @@
     const Utils = global.Views.Utils;
     const log = Utils ? Utils.log : console.log;
 
-    const API_BASE_URL = "https://api.viewseditors.com";
+    const API_BASE_URL = "http://localhost:3000";
     const API_KEY_STORAGE_KEY = "views_asset_manager_api_key";
     
     /** Cached extension version read from version.json */
