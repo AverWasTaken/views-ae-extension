@@ -267,14 +267,19 @@
         state.fetchSession++;
         const currentSession = state.fetchSession;
         
-        UI.setLoading(true);
+        // Only show loading UI if not on welcome screen
+        if (!state.isWelcome) {
+            UI.setLoading(true);
+        }
         
         try {
             let allFetched = null;
             
             // Check if we have preloaded assets available
             if (state.preloadPromise) {
-                UI.setStatus("Loading assets...", "info");
+                if (!state.isWelcome) {
+                    UI.setStatus("Loading assets...", "info");
+                }
                 log("Waiting for preloaded assets...");
                 allFetched = await state.preloadPromise;
                 state.preloadPromise = null;
@@ -288,7 +293,9 @@
             
             // If preload failed or wasn't available, fetch normally
             if (!allFetched) {
-                UI.setStatus("Connecting to server...", "info");
+                if (!state.isWelcome) {
+                    UI.setStatus("Connecting to server...", "info");
+                }
                 
                 let page = 1;
                 const limit = 100;
@@ -303,7 +310,9 @@
                 
                 const totalPages = Math.ceil(total / limit);
                 
-                UI.setStatus(`Loading assets (${allFetched.length}/${total})...`, "info");
+                if (!state.isWelcome) {
+                    UI.setStatus(`Loading assets (${allFetched.length}/${total})...`, "info");
+                }
                 
                 if (totalPages > 1) {
                     log(`Fetching ${totalPages - 1} more pages...`);
@@ -312,14 +321,16 @@
                         promises.push(API.fetchJson(`/assets?page=${p}&limit=${limit}`));
                     }
                     
-                    // Show progress as pages load
+                    // Show progress as pages load (only if not on welcome screen)
                     let loadedPages = 1;
                     const results = await Promise.all(
                         promises.map(async (promise) => {
                             const result = await promise;
                             loadedPages++;
                             const loaded = Math.min(loadedPages * limit, total);
-                            UI.setStatus(`Loading assets (${loaded}/${total})...`, "info");
+                            if (!state.isWelcome) {
+                                UI.setStatus(`Loading assets (${loaded}/${total})...`, "info");
+                            }
                             return result;
                         })
                     );
@@ -337,12 +348,20 @@
             state.allAssets = allFetched;
             log(`Synced ${state.allAssets.length} assets.`);
             
-            updateAssetView();
+            // Always update folder counts, even on welcome screen
+            updateFolderCounts();
+            
+            // Only update asset view if not on welcome screen
+            if (!state.isWelcome) {
+                updateAssetView();
+            }
             
         } catch (error) {
             console.error("Failed to sync assets", error);
-            UI.setStatus("Failed to sync assets. Check your connection.", "error");
-            if (state.fetchSession === currentSession) {
+            if (!state.isWelcome) {
+                UI.setStatus("Failed to sync assets. Check your connection.", "error");
+            }
+            if (state.fetchSession === currentSession && !state.isWelcome) {
                 const callbacks = {
                     onImport: handleAssetDownload,
                     onPreview: handleAssetPreview,
