@@ -83,12 +83,14 @@
 
             return new Promise((resolve, reject) => {
                 try {
-                    const tempDir = path.join(os.tmpdir(), "ViewsAssetManager");
-                    if (!fs.existsSync(tempDir)) {
-                        fs.mkdirSync(tempDir, { recursive: true });
+                    // Use Documents folder for permanent storage (matches hostscript.jsx getCacheFolder)
+                    // This prevents files from being deleted by OS temp cleanup or extension restarts
+                    const documentsDir = path.join(os.homedir(), "Documents", "ViewsAssetManager", "cache");
+                    if (!fs.existsSync(documentsDir)) {
+                        fs.mkdirSync(documentsDir, { recursive: true });
                     }
 
-                    const filePath = path.join(tempDir, safeName);
+                    const filePath = path.join(documentsDir, safeName);
                     const fileStream = fs.createWriteStream(filePath);
                     
                     const makeRequest = (url) => {

@@ -85,37 +85,22 @@
         return sanitized;
     }
 
+    /**
+     * Gets the permanent cache folder for downloaded assets.
+     * Uses Documents/ViewsAssetManager/cache to ensure files persist across sessions
+     * and are not deleted by OS temp cleanup or extension restarts.
+     * @returns {Folder} The cache folder
+     */
     function getCacheFolder() {
-        var folder = new Folder(Folder.temp.fsName + "/ViewsAssetManager");
-        if (!folder.exists) {
-            folder.create();
+        var baseFolder = new Folder(Folder.myDocuments.fsName + "/ViewsAssetManager");
+        if (!baseFolder.exists) {
+            baseFolder.create();
         }
-        return folder;
-    }
-
-    function cleanupOldCacheFiles() {
-        try {
-            var folder = getCacheFolder();
-            var files = folder.getFiles();
-            if (!files) return;
-
-            var now = new Date();
-            // 3 days in milliseconds
-            var maxAge = 3 * 24 * 60 * 60 * 1000;
-            
-            for (var i = 0; i < files.length; i++) {
-                var file = files[i];
-                if (file instanceof File) {
-                    var age = now.getTime() - file.modified.getTime();
-                    if (age > maxAge) {
-                        file.remove();
-                        // log("Removed old cache file: " + file.name);
-                    }
-                }
-            }
-        } catch (e) {
-            log("Cleanup error: " + e.toString());
+        var cacheFolder = new Folder(baseFolder.fsName + "/cache");
+        if (!cacheFolder.exists) {
+            cacheFolder.create();
         }
+        return cacheFolder;
     }
 
     function saveToTemp(base64Data, fileName) {
@@ -208,8 +193,5 @@
     $.global.importAndAddAsset = importAndAddAsset;
     $.global.getActiveComp = getActiveComp;
     $.global.saveToTemp = saveToTemp;
-
-    // Run cleanup on load
-    cleanupOldCacheFiles();
 })();
 
