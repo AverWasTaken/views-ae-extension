@@ -68,12 +68,13 @@
 
     /**
      * Selects a folder and triggers asset view update
-     * @param {string} folderId - Folder ID to select ("all" or folder UUID)
+     * @param {string} folderId - Folder ID to select ("all", "favorites", or folder UUID)
      * @param {Object} callbacks - Event callbacks for asset rendering
      * @param {Function} updateAssetViewFn - Function to update asset view
      */
     const selectFolder = async (folderId, callbacks, updateAssetViewFn) => {
         const state = State.getState();
+        const Preferences = global.Views.Preferences;
         const targetId = String(folderId);
 
         if (String(state.selectedFolderId) === targetId && !state.isWelcome) return;
@@ -87,11 +88,16 @@
 
         log(`Selected folder: ${targetId}`);
 
+        // Save last folder preference
+        if (Preferences) {
+            Preferences.setLastFolder(targetId);
+        }
+
         State.resetPagination();
         state.searchQuery = "";
         UI.clearSearch();
 
-        if (targetId === "all") {
+        if (targetId === "all" || targetId === "favorites") {
             state.currentFolderPath = [];
             UI.hideBreadcrumbs();
         } else {

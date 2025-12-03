@@ -91,6 +91,15 @@
      */
     const filterAssetsByFolder = (allAssets) => {
         const state = State.getState();
+        const Preferences = global.Views.Preferences;
+        
+        // Handle favorites folder
+        if (String(state.selectedFolderId) === "favorites") {
+            if (!Preferences) return [];
+            const favoriteIds = Preferences.getFavorites();
+            return allAssets.filter(asset => favoriteIds.includes(asset.id));
+        }
+        
         if (String(state.selectedFolderId) === "all") {
             return allAssets;
         }
@@ -117,11 +126,21 @@
     };
 
     /**
-     * Updates counts in the sidebar
+     * Updates counts in the sidebar including favorites
      */
     const updateFolderCounts = () => {
         const state = State.getState();
-        const counts = { all: state.allAssets.length };
+        const Preferences = global.Views.Preferences;
+        
+        // Count favorites
+        const favoriteIds = Preferences ? Preferences.getFavorites() : [];
+        const favoritesCount = state.allAssets.filter(a => favoriteIds.includes(a.id)).length;
+        
+        const counts = { 
+            all: state.allAssets.length,
+            favorites: favoritesCount
+        };
+        
         state.allAssets.forEach(asset => {
             if (asset.folderId) {
                 counts[asset.folderId] = (counts[asset.folderId] || 0) + 1;
@@ -569,6 +588,56 @@
         }
     };
 
+    /**
+     * Handles favorite toggle - updates counts and refreshes view if on favorites folder
+     * @param {Object} asset - The asset that was toggled
+     * @param {boolean} isFavorited - New favorite state
+     * @param {Object} callbacks - Asset callbacks for refreshing view
+     */
+    const handleFavoriteToggle = (asset, isFavorited, callbacks) => {
+        const state = State.getState();
+        
+        // Always update counts
+        updateFolderCounts();
+        
+        // If viewing favorites folder, refresh the view
+        if (String(state.selectedFolderId) === "favorites") {
+            updateAssetView(callbacks);
+        }
+        
+        log(`Asset ${asset.id} ${isFavorited ? "added to" : "removed from"} favorites`);
+    };
+
+    /**
+     * Loads more assets for infinite scroll (appends without re-rendering)
+     * @param {Object} callbacks - Asset callbacks
+     */
+    const loadMoreAssets = (callbacks) => {
+        const state = State.getState();
+        const currentCount = state.displayedAssets.length;
+        
+        if (currentCount < state.searchResults.length) {
+            const newCount = Math.min(currentCount + 20, state.searchResults.length);
+            const newAssets = state.searchResults.slice(currentCount, newCount);
+            
+            // Update state
+            state.visibleCount = newCount;
+            state.displayedAssets = state.searchResults.slice(0, newCount);
+            
+            // Append only the new assets (no re-render)
+            UI.appendAssets(newAssets, callbacks, currentCount);
+            
+            // Update stats
+            UI.updateSearchStats(state.displayedAssets.length, state.searchResults.length, state.searchQuery);
+            
+            // Hide load more button if no more
+            const hasMore = state.displayedAssets.length < state.searchResults.length;
+            UI.updateLoadMoreButton(hasMore, () => loadMoreAssets(callbacks));
+            
+            log(`Loaded ${newAssets.length} more assets (${state.displayedAssets.length}/${state.searchResults.length})`);
+        }
+    };
+
     global.Views.AssetController = {
         preloadAssetsInBackground,
         preloadFoldersInBackground,
@@ -586,7 +655,9 @@
         handleAssetSelect,
         clearSelection,
         getSelectedIds,
-        handleImportSelected
+        handleImportSelected,
+        handleFavoriteToggle,
+        loadMoreAssets
     };
 
 })(window);

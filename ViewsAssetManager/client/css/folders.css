@@ -205,3 +205,84 @@
     color: var(--ae-text-primary);
 }
 
+/* Sidebar Collapse Toggle */
+.sidebar-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--ae-text-muted);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.sidebar-toggle:hover {
+    background-color: var(--ae-bg-elevated);
+    color: var(--ae-text-primary);
+}
+
+.sidebar-toggle svg {
+    transition: transform 0.2s ease;
+}
+
+.folder-sidebar--collapsed .sidebar-toggle svg {
+    transform: rotate(180deg);
+}
+
+/* Collapsed Sidebar State */
+.folder-sidebar--collapsed {
+    width: 48px;
+}
+
+.folder-sidebar--collapsed .folder-sidebar__header h2,
+.folder-sidebar--collapsed .folder-item__name,
+.folder-sidebar--collapsed .folder-item__count,
+.folder-sidebar--collapsed .folder-item__toggle {
+    display: none;
+}
+
+.folder-sidebar--collapsed .folder-sidebar__header {
+    justify-content: center;
+    padding: 14px 8px;
+}
+
+.folder-sidebar--collapsed .folder-list {
+    padding: 8px 4px;
+}
+
+.folder-sidebar--collapsed .folder-item {
+    justify-content: center;
+    padding: 10px 8px;
+    gap: 0;
+}
+
+.folder-sidebar--collapsed .folder-item svg {
+    margin: 0;
+}
+
+.folder-sidebar--collapsed .folder-item__toggle-spacer {
+    display: none;
+}
+
+/* Favorites Folder Styling */
+.folder-item--favorites svg {
+    color: var(--ae-warning);
+}
+
+.folder-item--favorites.folder-item--active svg {
+    color: var(--ae-warning);
+}
+
+/* Separator after static items, before API folders */
+.folder-item--favorites + .folder-item:not([data-folder-id="all"]):not([data-folder-id="favorites"]) {
+    border-top: 1px solid var(--ae-border-subtle);
+    margin-top: 8px;
+    padding-top: 10px;
+}
+

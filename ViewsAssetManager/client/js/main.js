@@ -15,6 +15,8 @@
 
     const log = Utils.log;
 
+    const Preferences = Views.Preferences;
+
     /**
      * Creates asset rendering callbacks object
      * @returns {Object} Callbacks for asset rendering
@@ -23,6 +25,9 @@
         onImport: AssetController.handleAssetDownload,
         onPreview: AssetController.handleAssetPreview,
         onSelect: AssetController.handleAssetSelect,
+        onFavorite: (asset, isFavorited) => {
+            AssetController.handleFavoriteToggle(asset, isFavorited, getAssetCallbacks());
+        },
         getSelectedIds: AssetController.getSelectedIds
     });
 
@@ -438,6 +443,148 @@
         if (allAssetsItem) {
             allAssetsItem.addEventListener("click", () => selectFolder("all"));
         }
+
+        // Favorites folder
+        const favoritesItem = UI.elements.folderList.querySelector('[data-folder-id="favorites"]');
+        if (favoritesItem) {
+            favoritesItem.addEventListener("click", () => selectFolder("favorites"));
+        }
+
+        // Sidebar toggle
+        if (UI.elements.sidebarToggle) {
+            UI.elements.sidebarToggle.addEventListener("click", () => UI.toggleSidebar());
+        }
+
+        // Context menu event listeners
+        if (UI.elements.contextMenu) {
+            // Hide context menu when clicking outside
+            document.addEventListener("click", (e) => {
+                if (!UI.elements.contextMenu.contains(e.target)) {
+                    UI.hideContextMenu();
+                }
+            });
+
+            // Hide context menu on scroll
+            document.addEventListener("scroll", () => UI.hideContextMenu(), true);
+
+            // Context menu actions
+            UI.elements.contextMenu.querySelectorAll(".context-menu__item").forEach(item => {
+                item.addEventListener("click", () => {
+                    const action = item.dataset.action;
+                    const asset = UI.getContextMenuAsset();
+                    const callbacks = UI.getContextMenuCallbacks();
+                    
+                    if (!asset) return;
+                    
+                    switch (action) {
+                        case "import":
+                            if (callbacks.onImport) {
+                                callbacks.onImport(asset, item);
+                            }
+                            break;
+                        case "preview":
+                            if (callbacks.onPreview) {
+                                callbacks.onPreview(asset);
+                            }
+                            break;
+                        case "favorite":
+                            if (Preferences) {
+                                const nowFavorited = Preferences.toggleFavorite(asset.id);
+                                AssetController.handleFavoriteToggle(asset, nowFavorited, getAssetCallbacks());
+                                // Update card UI
+                                const card = document.querySelector(`[data-asset-id="${asset.id}"]`);
+                                if (card) {
+                                    const favBtn = card.querySelector(".asset-card__favorite");
+                                    if (favBtn) {
+                                        favBtn.classList.toggle("asset-card__favorite--active", nowFavorited);
+                                        const svg = favBtn.querySelector("svg");
+                                        if (svg) svg.setAttribute("fill", nowFavorited ? "currentColor" : "none");
+                                    }
+                                }
+                            }
+                            break;
+                        case "copy":
+                            const displayName = Utils.getDisplayName(asset.name || asset.id);
+                            navigator.clipboard.writeText(displayName).then(() => {
+                                UI.setStatus(`Copied "${displayName}" to clipboard`, "success");
+                            }).catch(() => {
+                                UI.setStatus("Failed to copy to clipboard", "error");
+                            });
+                            break;
+                    }
+                    
+                    UI.hideContextMenu();
+                });
+            });
+        }
+
+        // Infinite scroll using IntersectionObserver
+        setupInfiniteScroll();
+    };
+
+    /** IntersectionObserver for infinite scroll */
+    let scrollObserver = null;
+    
+    /** Debounce flag for infinite scroll */
+    let isLoadingMore = false;
+
+    /**
+     * Sets up infinite scroll observer
+     */
+    const setupInfiniteScroll = () => {
+        const mainContent = document.querySelector(".main-content");
+        if (!mainContent) return;
+
+        // Create sentinel element
+        let sentinel = document.getElementById("scrollSentinel");
+        if (!sentinel) {
+            sentinel = document.createElement("div");
+            sentinel.id = "scrollSentinel";
+            sentinel.className = "scroll-sentinel";
+        }
+
+        // Create observer with debounce
+        scrollObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting && !isLoadingMore) {
+                    const state = State.getState();
+                    // Only load more if not on welcome screen and there are more to load
+                    if (!state.isWelcome && state.displayedAssets.length < state.searchResults.length) {
+                        isLoadingMore = true;
+                        AssetController.loadMoreAssets(getAssetCallbacks());
+                        // Reset flag after a short delay
+                        setTimeout(() => {
+                            isLoadingMore = false;
+                        }, 100);
+                    }
+                }
+            });
+        }, {
+            root: mainContent,
+            rootMargin: "200px", // Start loading earlier
+            threshold: 0
+        });
+
+        // Append sentinel to grid and observe
+        const appendSentinel = () => {
+            const grid = UI.elements.grid;
+            if (grid && !grid.contains(sentinel)) {
+                grid.appendChild(sentinel);
+            }
+            if (sentinel) {
+                scrollObserver.observe(sentinel);
+            }
+        };
+
+        // Re-append sentinel after grid updates (via MutationObserver)
+        const gridObserver = new MutationObserver(() => {
+            appendSentinel();
+        });
+
+        if (UI.elements.grid) {
+            gridObserver.observe(UI.elements.grid, { childList: true });
+            appendSentinel();
+        }
     };
 
     /**
@@ -446,6 +593,10 @@
     const init = async () => {
         const state = State.getState();
         bindEvents();
+
+        // Load saved preferences
+        UI.loadGridSizePreference();
+        UI.loadSidebarPreference();
 
         try {
             log("Initializing panel UI.");

@@ -70,8 +70,20 @@
         currentVersion: document.getElementById("currentVersion"),
         newVersion: document.getElementById("newVersion"),
         // Version badge
-        versionBadge: document.getElementById("versionBadge")
+        versionBadge: document.getElementById("versionBadge"),
+        // Sidebar
+        folderSidebar: document.getElementById("folderSidebar"),
+        sidebarToggle: document.getElementById("sidebarToggle"),
+        // Context menu
+        contextMenu: document.getElementById("contextMenu"),
+        contextMenuFavoriteText: document.getElementById("contextMenuFavoriteText")
     };
+
+    /** Current context menu target asset */
+    let contextMenuAsset = null;
+
+    /** Callbacks for context menu actions */
+    let contextMenuCallbacks = {};
 
     const LoadingOverlay = {
         el: document.getElementById("loadingOverlay"),
@@ -320,13 +332,16 @@
      * @param {Function} onFolderSelect - Callback when a folder is clicked
      */
     const renderFolders = (folders, onFolderSelect) => {
-        // Clear existing custom folders (keep "All Assets")
-        const existingItems = elements.folderList.querySelectorAll('.folder-item:not([data-folder-id="all"])');
+        // Clear existing custom folders (keep "All Assets" and "Favorites")
+        const existingItems = elements.folderList.querySelectorAll('.folder-item:not([data-folder-id="all"]):not([data-folder-id="favorites"])');
         existingItems.forEach(item => item.remove());
 
-        // Initialize "All Assets" count to "-" until loaded
+        // Initialize counts to "-" until loaded
         const allItem = elements.folderList.querySelector('[data-folder-id="all"] .folder-item__count');
         if (allItem) allItem.textContent = "-";
+        
+        const favItem = elements.folderList.querySelector('[data-folder-id="favorites"] .folder-item__count');
+        if (favItem) favItem.textContent = "-";
 
         // Build tree structure
         const { rootFolders, childrenMap } = buildFolderTree(folders);
@@ -530,11 +545,12 @@
     /**
      * Creates an asset card element for the grid
      * @param {Object} asset - Asset data from API (id, name, size, thumbnail, uploadDate)
-     * @param {Object} callbacks - Callbacks object with onImport, onPreview, onSelect
+     * @param {Object} callbacks - Callbacks object with onImport, onPreview, onSelect, onFavorite
      * @returns {HTMLElement} Article element containing the asset card
      */
     const createAssetCard = (asset, callbacks) => {
-        const { onImport, onPreview, onSelect, isSelected } = callbacks;
+        const { onImport, onPreview, onSelect, onFavorite, isSelected } = callbacks;
+        const Preferences = global.Views.Preferences;
         
         const card = document.createElement("article");
         card.className = "asset-card" + (isSelected ? " asset-card--selected" : "");
@@ -559,6 +575,34 @@
             if (onSelect) onSelect(asset, card);
         });
 
+        // Favorite button
+        const isFavorited = Preferences && Preferences.isFavorite(asset.id);
+        const favoriteBtn = document.createElement("button");
+        favoriteBtn.type = "button";
+        favoriteBtn.className = "asset-card__favorite" + (isFavorited ? " asset-card__favorite--active" : "");
+        favoriteBtn.title = isFavorited ? "Remove from favorites" : "Add to favorites";
+        const starIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        starIcon.setAttribute("width", "14");
+        starIcon.setAttribute("height", "14");
+        starIcon.setAttribute("viewBox", "0 0 24 24");
+        starIcon.setAttribute("fill", isFavorited ? "currentColor" : "none");
+        starIcon.setAttribute("stroke", "currentColor");
+        starIcon.setAttribute("stroke-width", "2");
+        const starPath = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+        starPath.setAttribute("points", "12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2");
+        starIcon.appendChild(starPath);
+        favoriteBtn.appendChild(starIcon);
+        favoriteBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (Preferences) {
+                const nowFavorited = Preferences.toggleFavorite(asset.id);
+                favoriteBtn.classList.toggle("asset-card__favorite--active", nowFavorited);
+                favoriteBtn.title = nowFavorited ? "Remove from favorites" : "Add to favorites";
+                starIcon.setAttribute("fill", nowFavorited ? "currentColor" : "none");
+                if (onFavorite) onFavorite(asset, nowFavorited);
+            }
+        });
+
         const img = document.createElement("img");
         img.className = "asset-card__thumb";
         img.alt = displayName || "Asset thumbnail";
@@ -572,8 +616,8 @@
         img.addEventListener("dblclick", (e) => {
             e.preventDefault();
             // Find the import button and trigger import
-            const importBtn = card.querySelector(".asset-card__cta:not(.asset-card__cta--preview)");
-            if (onImport && importBtn) onImport(asset, importBtn);
+            const importBtnEl = card.querySelector(".asset-card__cta:not(.asset-card__cta--preview)");
+            if (onImport && importBtnEl) onImport(asset, importBtnEl);
         });
 
         const title = document.createElement("p");
@@ -618,7 +662,14 @@
         actions.appendChild(previewBtn);
         actions.appendChild(importBtn);
 
+        // Context menu
+        card.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            showContextMenu(e.clientX, e.clientY, asset, callbacks);
+        });
+
         card.appendChild(checkbox);
+        card.appendChild(favoriteBtn);
         card.appendChild(img);
         card.appendChild(title);
         card.appendChild(actions);
@@ -692,6 +743,44 @@
         });
         elements.grid.appendChild(fragment);
         log(`Rendered ${assets.length} assets.`);
+    };
+
+    /**
+     * Appends additional assets to the grid (for infinite scroll)
+     * Does not clear existing content, just adds new items
+     * @param {Array} assets - Array of NEW asset objects to append
+     * @param {Object} callbacks - Callbacks object
+     * @param {number} startIndex - Starting index for animation delay
+     */
+    const appendAssets = (assets, callbacks, startIndex = 0) => {
+        if (!assets.length) return;
+
+        const selectedIds = callbacks.getSelectedIds ? callbacks.getSelectedIds() : [];
+        const fragment = document.createDocumentFragment();
+        
+        assets.forEach((asset, index) => {
+            const isSelected = selectedIds.includes(asset.id);
+            const card = createAssetCard(asset, { ...callbacks, isSelected });
+            // Minimal staggered animation for smoother feel
+            const delay = Math.min(index * 20, 200);
+            card.style.animationDelay = `${delay}ms`;
+            fragment.appendChild(card);
+        });
+        
+        // Remove the scroll sentinel before appending
+        const sentinel = document.getElementById("scrollSentinel");
+        if (sentinel) {
+            sentinel.remove();
+        }
+        
+        elements.grid.appendChild(fragment);
+        
+        // Re-add sentinel after new content
+        if (sentinel) {
+            elements.grid.appendChild(sentinel);
+        }
+        
+        log(`Appended ${assets.length} more assets.`);
     };
 
     /**
@@ -920,10 +1009,11 @@
     };
 
     /**
-     * Sets the grid size
+     * Sets the grid size and persists preference
      * @param {string} size - "small", "medium", or "large"
+     * @param {boolean} persist - Whether to save to preferences (default: true)
      */
-    const setGridSize = (size) => {
+    const setGridSize = (size, persist = true) => {
         // Remove existing size classes
         elements.grid.classList.remove("asset-grid--small", "asset-grid--medium", "asset-grid--large");
         // Add new size class
@@ -936,8 +1026,116 @@
             }
         });
         
+        // Persist preference
+        if (persist && global.Views.Preferences) {
+            global.Views.Preferences.setGridSize(size);
+        }
+        
         log(`Grid size set to: ${size}`);
     };
+
+    /**
+     * Loads and applies saved grid size preference
+     */
+    const loadGridSizePreference = () => {
+        if (global.Views.Preferences) {
+            const savedSize = global.Views.Preferences.getGridSize();
+            if (savedSize) {
+                setGridSize(savedSize, false);
+            }
+        }
+    };
+
+    /**
+     * Toggles the sidebar collapsed state
+     * @param {boolean} [forceState] - Force collapsed state (optional)
+     */
+    const toggleSidebar = (forceState) => {
+        if (!elements.folderSidebar) return;
+        
+        const isCollapsed = forceState !== undefined 
+            ? forceState 
+            : !elements.folderSidebar.classList.contains("folder-sidebar--collapsed");
+        
+        elements.folderSidebar.classList.toggle("folder-sidebar--collapsed", isCollapsed);
+        
+        // Update toggle button title
+        if (elements.sidebarToggle) {
+            elements.sidebarToggle.title = isCollapsed ? "Expand sidebar" : "Collapse sidebar";
+        }
+        
+        // Persist preference
+        if (global.Views.Preferences) {
+            global.Views.Preferences.setSidebarCollapsed(isCollapsed);
+        }
+        
+        log(`Sidebar ${isCollapsed ? "collapsed" : "expanded"}`);
+    };
+
+    /**
+     * Loads and applies saved sidebar state
+     */
+    const loadSidebarPreference = () => {
+        if (global.Views.Preferences && elements.folderSidebar) {
+            const isCollapsed = global.Views.Preferences.getSidebarCollapsed();
+            if (isCollapsed) {
+                toggleSidebar(true);
+            }
+        }
+    };
+
+    /**
+     * Shows the context menu at the specified position
+     * @param {number} x - X coordinate
+     * @param {number} y - Y coordinate
+     * @param {Object} asset - The asset for context actions
+     * @param {Object} callbacks - Callbacks for menu actions
+     */
+    const showContextMenu = (x, y, asset, callbacks) => {
+        if (!elements.contextMenu) return;
+        
+        contextMenuAsset = asset;
+        contextMenuCallbacks = callbacks;
+        
+        // Update favorite text based on current state
+        const isFav = global.Views.Preferences && global.Views.Preferences.isFavorite(asset.id);
+        if (elements.contextMenuFavoriteText) {
+            elements.contextMenuFavoriteText.textContent = isFav ? "Remove from Favorites" : "Add to Favorites";
+        }
+        
+        // Position the menu
+        elements.contextMenu.style.display = "block";
+        
+        // Adjust position if menu would go off screen
+        const menuRect = elements.contextMenu.getBoundingClientRect();
+        const adjustedX = Math.min(x, window.innerWidth - menuRect.width - 10);
+        const adjustedY = Math.min(y, window.innerHeight - menuRect.height - 10);
+        
+        elements.contextMenu.style.left = `${adjustedX}px`;
+        elements.contextMenu.style.top = `${adjustedY}px`;
+    };
+
+    /**
+     * Hides the context menu
+     */
+    const hideContextMenu = () => {
+        if (elements.contextMenu) {
+            elements.contextMenu.style.display = "none";
+        }
+        contextMenuAsset = null;
+    };
+
+    /**
+     * Gets the current context menu asset
+     * @returns {Object|null} The asset or null
+     */
+    const getContextMenuAsset = () => contextMenuAsset;
+
+    /**
+     * Gets the context menu callbacks
+     * @returns {Object} The callbacks
+     */
+    const getContextMenuCallbacks = () => contextMenuCallbacks;
 
     /**
      * Updates the preview navigation buttons state
@@ -1166,6 +1364,7 @@
         expandToFolder,
         updateFolderCount,
         renderAssets,
+        appendAssets,
         renderSkeletons,
         showApiKeyModal,
         hideApiKeyModal,
@@ -1181,6 +1380,13 @@
         updateSelectionBar,
         toggleCardSelection,
         setGridSize,
+        loadGridSizePreference,
+        toggleSidebar,
+        loadSidebarPreference,
+        showContextMenu,
+        hideContextMenu,
+        getContextMenuAsset,
+        getContextMenuCallbacks,
         updatePreviewNav,
         isPreviewOpen,
         showFeedbackButton,
