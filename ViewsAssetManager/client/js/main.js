@@ -351,6 +351,9 @@
             // Always update folder counts, even on welcome screen
             updateFolderCounts();
             
+            // Show loaded message
+            UI.setStatus(`${state.allAssets.length} assets loaded`, "success");
+            
             // Only update asset view if not on welcome screen
             if (!state.isWelcome) {
                 updateAssetView();
@@ -438,6 +441,19 @@
 
     const handleAssetDownload = async (asset, button) => {
         const displayName = Utils.getDisplayName(asset.name || asset.id);
+        
+        // Check for active composition FIRST before downloading
+        try {
+            const hasComp = await Utils.evalScript("getActiveComp() !== null");
+            if (hasComp === "false" || hasComp === false) {
+                UI.setStatus("Please open or select a composition first.", "error");
+                return;
+            }
+        } catch (compCheckError) {
+            log("Composition check failed:", compCheckError);
+            UI.setStatus("Please open or select a composition first.", "error");
+            return;
+        }
         
         UI.LoadingOverlay.show(`Downloading ${displayName}`, "Starting download...");
         button.disabled = true;
@@ -810,6 +826,19 @@
      */
     const handleImportSelected = async () => {
         if (state.selectedAssetIds.length === 0) return;
+        
+        // Check for active composition FIRST before downloading
+        try {
+            const hasComp = await Utils.evalScript("getActiveComp() !== null");
+            if (hasComp === "false" || hasComp === false) {
+                UI.setStatus("Please open or select a composition first.", "error");
+                return;
+            }
+        } catch (compCheckError) {
+            log("Composition check failed:", compCheckError);
+            UI.setStatus("Please open or select a composition first.", "error");
+            return;
+        }
         
         const selectedAssets = state.allAssets.filter(a => state.selectedAssetIds.includes(a.id));
         const total = selectedAssets.length;

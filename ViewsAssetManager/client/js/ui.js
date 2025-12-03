@@ -188,8 +188,6 @@
                 Utils.csInterface.openURLInDefaultBrowser("https://discord.gg/views");
             });
         }
-
-        setStatus("Ready.", "info");
     };
 
     /**
