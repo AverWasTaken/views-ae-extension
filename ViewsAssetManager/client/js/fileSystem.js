@@ -11,14 +11,22 @@
     const log = Utils ? Utils.log : console.log;
 
     /**
-     * Gets the cache folder path
+     * Gets the cache folder path (cross-platform: Windows & Mac)
+     * - Windows: C:\Users\{user}\Documents\ViewsAssetManager\cache
+     * - Mac: /Users/{user}/Documents/ViewsAssetManager/cache
      * @returns {string} Path to the cache folder
      */
     const getCacheFolderPath = () => {
         if (typeof require === "function") {
             const path = require("path");
             const os = require("os");
-            return path.join(os.homedir(), "Documents", "ViewsAssetManager", "cache");
+            const homeDir = os.homedir();
+            
+            // On Mac, check if Documents exists at ~/Documents
+            // On Windows, Documents is always at %USERPROFILE%\Documents
+            const documentsPath = path.join(homeDir, "Documents");
+            
+            return path.join(documentsPath, "ViewsAssetManager", "cache");
         }
         return "Documents/ViewsAssetManager/cache";
     };
@@ -54,7 +62,21 @@
 
         if (!cacheExists()) {
             log("Cache folder will be created - showing notice to user");
-            const displayPath = getCacheFolderPath().replace(/\\/g, "/");
+            // Get full path and create a user-friendly display version
+            const fullPath = getCacheFolderPath();
+            // Replace backslashes with forward slashes for consistency
+            // and simplify home directory to ~ for readability
+            let displayPath = fullPath.replace(/\\/g, "/");
+            
+            if (typeof require === "function") {
+                const os = require("os");
+                const homeDir = os.homedir().replace(/\\/g, "/");
+                // Replace full home path with ~ for cleaner display
+                if (displayPath.startsWith(homeDir)) {
+                    displayPath = "~" + displayPath.substring(homeDir.length);
+                }
+            }
+            
             UI.CacheNoticeModal.show(displayPath);
             Preferences.setCacheNoticeSeen();
         } else {
@@ -136,13 +158,15 @@
             return new Promise((resolve, reject) => {
                 try {
                     // Use Documents folder for permanent storage (matches hostscript.jsx getCacheFolder)
-                    // This prevents files from being deleted by OS temp cleanup or extension restarts
-                    const documentsDir = path.join(os.homedir(), "Documents", "ViewsAssetManager", "cache");
-                    if (!fs.existsSync(documentsDir)) {
-                        fs.mkdirSync(documentsDir, { recursive: true });
+                    // Cross-platform: Works on both Windows and Mac
+                    // - Windows: C:\Users\{user}\Documents\ViewsAssetManager\cache
+                    // - Mac: /Users/{user}/Documents/ViewsAssetManager/cache
+                    const cacheDir = getCacheFolderPath();
+                    if (!fs.existsSync(cacheDir)) {
+                        fs.mkdirSync(cacheDir, { recursive: true });
                     }
 
-                    const filePath = path.join(documentsDir, safeName);
+                    const filePath = path.join(cacheDir, safeName);
                     const fileStream = fs.createWriteStream(filePath);
                     
                     const makeRequest = (url) => {

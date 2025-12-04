@@ -89,9 +89,13 @@
      * Gets the permanent cache folder for downloaded assets.
      * Uses Documents/ViewsAssetManager/cache to ensure files persist across sessions
      * and are not deleted by OS temp cleanup or extension restarts.
+     * Cross-platform: Works on both Windows and Mac via Folder.myDocuments
+     * - Windows: C:\Users\{user}\Documents\ViewsAssetManager\cache
+     * - Mac: /Users/{user}/Documents/ViewsAssetManager/cache
      * @returns {Folder} The cache folder
      */
     function getCacheFolder() {
+        // Folder.myDocuments returns the user's Documents folder on both Windows and Mac
         var baseFolder = new Folder(Folder.myDocuments.fsName + "/ViewsAssetManager");
         if (!baseFolder.exists) {
             baseFolder.create();
