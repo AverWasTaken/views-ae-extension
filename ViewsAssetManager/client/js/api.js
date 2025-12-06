@@ -4,19 +4,19 @@
  * Views Asset Manager - API
  * Handles authentication and network requests.
  */
-(function(global) {
+(function (global) {
     global.Views = global.Views || {};
-    
+
     // Wait for Utils to be available
     const Utils = global.Views.Utils;
     const log = Utils ? Utils.log : console.log;
 
-    const API_BASE_URL = "https://api.viewseditors.com";
+    const API_BASE_URL = "http://localhost:3000";
     const API_KEY_STORAGE_KEY = "views_asset_manager_api_key";
-    
+
     /** Cached extension version read from version.json */
     let cachedExtensionVersion = null;
-    
+
     /**
      * Gets the extension version from version.json
      * @returns {string} Version string
@@ -29,10 +29,10 @@
             const fs = require("fs");
             const path = require("path");
             const versionPath = path.join(extensionPath, "version.json");
-            
+
             log("Extension path:", extensionPath);
             log("Looking for version.json at:", versionPath);
-            
+
             if (fs.existsSync(versionPath)) {
                 let versionContent = fs.readFileSync(versionPath, "utf8");
                 // Remove BOM if present (PowerShell UTF8 adds it)
@@ -51,12 +51,12 @@
         } catch (e) {
             log("Failed to read version from version.json:", e.message);
         }
-        
+
         // Fallback
         log("Using fallback version 1.0.0");
         return "1.0.0";
     };
-    
+
     let currentApiKey = "";
     let cachedDeviceId = null;
 
@@ -246,7 +246,7 @@
                 try {
                     const errorData = await response.json();
                     errorDetails = errorData.message || errorData.error || "";
-                } catch (e) {}
+                } catch (e) { }
                 throw new Error(`Validation error: ${errorDetails || "Invalid request. Please try again."}`);
             }
 
@@ -255,20 +255,20 @@
                 try {
                     const errorData = await response.json();
                     errorDetails = errorData.message || errorData.error || "";
-                } catch (e) {}
+                } catch (e) { }
                 throw new Error(`Server error (500)${errorDetails ? ": " + errorDetails : ". Please try again later or contact support."}`);
             }
 
             throw new Error(`API error ${response.status}: ${response.statusText}`);
         } catch (error) {
-            if (error.message.includes("API error") || 
-                error.message.includes("Invalid API key") || 
+            if (error.message.includes("API error") ||
+                error.message.includes("Invalid API key") ||
                 error.message.includes("already registered") ||
                 error.message.includes("Server error") ||
                 error.message.includes("Validation error")) {
                 throw error;
             }
-            
+
             log("Validation error:", error);
             throw new Error("Unable to validate API key. Check your network connection. You may be on a newtwork that blocks the API. Consider using a VPN or proxy.");
         }
@@ -298,7 +298,7 @@
      */
     const getChildFolders = async (parentId = null) => {
         try {
-            const endpoint = parentId && parentId !== "root" 
+            const endpoint = parentId && parentId !== "root"
                 ? `/folders/children/${encodeURIComponent(parentId)}`
                 : "/folders/children";
             log(`Fetching child folders for: ${parentId || "root"}`);
@@ -321,7 +321,7 @@
         if (!folderId) {
             return [];
         }
-        
+
         try {
             log(`Fetching path for folder: ${folderId}`);
             const data = await fetchJson(`/folders/${encodeURIComponent(folderId)}/path`);
@@ -385,14 +385,14 @@
         try {
             const [serverMajor, serverMinor, serverPatch] = serverVersion.split(".").map(Number);
             const [localMajor, localMinor, localPatch] = localVersion.split(".").map(Number);
-            
+
             // Server major version is higher
             if (serverMajor > localMajor) return true;
             // Same major, server minor is higher
             if (serverMajor === localMajor && serverMinor > localMinor) return true;
             // Same major and minor, server patch is higher
             if (serverMajor === localMajor && serverMinor === localMinor && serverPatch > localPatch) return true;
-            
+
             return false;
         } catch (e) {
             // If parsing fails, fall back to simple string comparison
